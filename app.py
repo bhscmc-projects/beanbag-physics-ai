@@ -5,6 +5,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
 - 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
 - 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
+- 徹底隱藏頂部右上角 (GitHub/Fork/選單) 與右下角 (Streamlit 徽章/Manage App 皇冠)，打造純淨學生教學介面
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -60,6 +61,33 @@ h1 {
     font-size: 1.15rem !important;
     color: #94a3b8 !important;
     margin-bottom: 0.8rem !important;
+}
+
+/* ---------------- 隱藏學生無需看見的開發者與 Streamlit 介面 ---------------- */
+[data-testid="stDecoration"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+#MainMenu,
+header [data-testid="stHeaderActionElements"],
+header [data-testid="stToolbar"],
+.stForkButton,
+.stAppDeployButton {
+    display: none !important;
+    visibility: hidden !important;
+}
+footer,
+[data-testid="stFooter"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+[class*="viewerBadge"],
+[data-testid="manage-app-button"],
+#manage-app-button,
+div[class*="StatusWidget"],
+[data-testid="stStatusWidget"] {
+    display: none !important;
+    visibility: hidden !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -422,7 +450,7 @@ components.html(
             var parentDoc = window.parent.document;
             if (!parentDoc) return;
 
-            // 1. 清理舊定時器，徹底杜絕單頁應用快取導致的失效
+            // 1. 清理舊定時器
             if (window.parent._stThumbSyncTimer) {{
                 window.parent.clearInterval(window.parent._stThumbSyncTimer);
             }}
