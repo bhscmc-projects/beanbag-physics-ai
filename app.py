@@ -1,13 +1,15 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 始終由用戶主動上傳影片 (移除內建示範影片選項)
-- 消除停止按鈕的 4 幀延遲 (改為逐 1 幀前進 + 雲端網絡延遲補償，即按即停)
-- 採用 Base64 內嵌影像，確保紅條與影片 100% 同步
+- 使用 st.html() 注入 CSS 與 HTML，徹底解決 Markdown 將 CSS 誤渲染為程式碼區塊的問題
+- 採用 Base64 內嵌影像，確保紅條滑桿與影片影格 100% 即時同步
+- 消除停止按鈕延遲，即按即停
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
+import os
 import io
 import base64
+import textwrap
 import tempfile
 import time
 import cv2
@@ -28,199 +30,208 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
+# 輔助函式：安全注入純 HTML/CSS，防止 Markdown 誤將縮排解析為代碼區塊
+def render_html(html_str):
+    clean = textwrap.dedent(html_str).strip()
+    if hasattr(st, "html"):
+        st.html(clean)
+    else:
+        st.markdown(clean, unsafe_allow_html=True)
+
+# ---------------- 全局 CSS 樣式 ----------------
+render_html("""
 <style>
-    /* 全局基底字體 */
-    html, body, [class*="css"] {
-        font-size: 1.05rem !important;
-    }
+/* 全局基底字體 */
+html, body, [class*="css"] {
+    font-size: 1.05rem !important;
+}
 
-    h1 {
-        font-size: 2.1rem !important;
-        font-weight: 800 !important;
-        margin-bottom: 0.2rem !important;
-    }
-    .sub-caption {
-        font-size: 1.15rem !important;
-        color: #94a3b8 !important;
-        margin-bottom: 0.8rem !important;
-    }
+h1 {
+    font-size: 2.1rem !important;
+    font-weight: 800 !important;
+    margin-bottom: 0.2rem !important;
+}
+.sub-caption {
+    font-size: 1.15rem !important;
+    color: #94a3b8 !important;
+    margin-bottom: 0.8rem !important;
+}
 
-    /* 頂部 5 個微調按鈕標準樣式 */
-    div[data-testid="stButton"] button {
-        min-height: 44px !important;
-        font-size: 1.08rem !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-    }
+/* 頂部 5 個微調按鈕標準樣式 */
+div[data-testid="stButton"] button {
+    min-height: 44px !important;
+    font-size: 1.08rem !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+}
 
-    /* 專屬：淺褐色圓形播放/暫停按鈕 */
-    button[data-testid="baseButton-primary"],
-    .st-key-btn_play_circle button,
-    .st-key-btn_stop_circle button,
-    button[kind="primary"] {
-        background: linear-gradient(135deg, #d49a5b 0%, #8c531b 100%) !important;
-        background-color: #b8824f !important;
-        color: #ffffff !important;
-        border: 2.5px solid #fde68a !important;
-        border-radius: 50% !important;
-        width: 48px !important;
-        height: 48px !important;
-        min-height: 48px !important;
-        max-height: 48px !important;
-        min-width: 48px !important;
-        max-width: 48px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        box-shadow: 0 0 16px rgba(212, 154, 91, 0.75), 0 4px 10px rgba(0, 0, 0, 0.5) !important;
-        cursor: pointer !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
+/* 專屬：淺褐色圓形播放/暫停按鈕 */
+button[data-testid="baseButton-primary"],
+.st-key-btn_play_circle button,
+.st-key-btn_stop_circle button,
+button[kind="primary"] {
+    background: linear-gradient(135deg, #d49a5b 0%, #8c531b 100%) !important;
+    background-color: #b8824f !important;
+    color: #ffffff !important;
+    border: 2.5px solid #fde68a !important;
+    border-radius: 50% !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 0 16px rgba(212, 154, 91, 0.75), 0 4px 10px rgba(0, 0, 0, 0.5) !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
 
-    button[data-testid="baseButton-primary"]:hover,
-    .st-key-btn_play_circle button:hover,
-    .st-key-btn_stop_circle button:hover,
-    button[kind="primary"]:hover {
-        transform: scale(1.10) !important;
-        background: linear-gradient(135deg, #e4aa6b 0%, #9e5f22 100%) !important;
-        background-color: #c48b54 !important;
-        border-color: #ffffff !important;
-        box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
-    }
+button[data-testid="baseButton-primary"]:hover,
+.st-key-btn_play_circle button:hover,
+.st-key-btn_stop_circle button:hover,
+button[kind="primary"]:hover {
+    transform: scale(1.10) !important;
+    background: linear-gradient(135deg, #e4aa6b 0%, #9e5f22 100%) !important;
+    background-color: #c48b54 !important;
+    border-color: #ffffff !important;
+    box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
+}
 
-    button[data-testid="baseButton-primary"] p,
-    .st-key-btn_play_circle button p,
-    .st-key-btn_stop_circle button p,
-    button[kind="primary"] p {
-        color: #ffffff !important;
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        line-height: 1 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+button[data-testid="baseButton-primary"] p,
+.st-key-btn_play_circle button p,
+.st-key-btn_stop_circle button p,
+button[kind="primary"] p {
+    color: #ffffff !important;
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
 
-    /* 播放時間軸進度文字 */
-    .play-progress-label {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #f8fafc;
-        margin-top: 8px;
-        margin-bottom: 2px;
-    }
+/* 播放時間軸進度文字 */
+.play-progress-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
 
-    /* 紅色滑桿軌道垂直居中 */
-    div[data-testid="stSlider"] {
-        padding-top: 19px !important;
-        margin-top: 0 !important;
-    }
+/* 紅色滑桿軌道垂直居中 */
+div[data-testid="stSlider"] {
+    padding-top: 19px !important;
+    margin-top: 0 !important;
+}
 
-    /* 側邊數據看板：1:1 佈局 */
-    .side-card-compact {
-        background-color: #0f172a;
-        border-radius: 12px;
-        padding: 12px 14px;
-        border: 1.5px solid #334155;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-        display: flex;
-        flex-direction: column;
-        gap: 9px;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .side-item-compact {
-        background-color: #1e293b;
-        border-radius: 8px;
-        padding: 9px 12px;
-        border-left: 4px solid #38bdf8;
-        box-sizing: border-box;
-        overflow: hidden;
-    }
-    
-    /* 水平左右佈局 */
-    .side-row-layout {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .side-text-col {
-        flex: 0 0 46%;
-        min-width: 110px;
-    }
-    .side-bar-col {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        box-sizing: border-box;
-    }
-    .side-label {
-        font-size: 0.90rem;
-        color: #94a3b8;
-        font-weight: 600;
-        margin-bottom: 1px;
-    }
-    .side-val-main {
-        font-size: 1.35rem;
-        font-weight: 800;
-        line-height: 1.15;
-    }
-    .side-val-sub {
-        font-size: 0.82rem;
-        color: #cbd5e1;
-        font-weight: 500;
-        margin-top: 1px;
-    }
+/* 側邊數據看板：1:1 佈局 */
+.side-card-compact {
+    background-color: #0f172a;
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid #334155;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.side-item-compact {
+    background-color: #1e293b;
+    border-radius: 8px;
+    padding: 9px 12px;
+    border-left: 4px solid #38bdf8;
+    box-sizing: border-box;
+    overflow: hidden;
+}
 
-    /* 橫向長條圖 */
-    .meter-bar-track {
-        width: 100%;
-        height: 11px;
-        background-color: #0b1120;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        overflow: hidden;
-        position: relative;
-        box-sizing: border-box;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-    }
-    .meter-bar-fill {
-        height: 100%;
-        border-radius: 5px;
-        transition: width 0.10s ease-out;
-    }
-    .meter-bar-scale {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.66rem;
-        color: #64748b;
-        font-weight: 600;
-        padding: 0 1px;
-        line-height: 1;
-        margin-top: 1px;
-    }
-    .side-badge {
-        background-color: #0b1120;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 2px 8px;
-        color: #94a3b8;
-        font-size: 0.84rem;
-        font-weight: 700;
-        white-space: nowrap;
-    }
+/* 水平左右佈局 */
+.side-row-layout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.side-text-col {
+    flex: 0 0 46%;
+    min-width: 110px;
+}
+.side-bar-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    box-sizing: border-box;
+}
+.side-label {
+    font-size: 0.90rem;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-bottom: 1px;
+}
+.side-val-main {
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1.15;
+}
+.side-val-sub {
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    font-weight: 500;
+    margin-top: 1px;
+}
+
+/* 橫向長條圖 */
+.meter-bar-track {
+    width: 100%;
+    height: 11px;
+    background-color: #0b1120;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.meter-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.10s ease-out;
+}
+.meter-bar-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.66rem;
+    color: #64748b;
+    font-weight: 600;
+    padding: 0 1px;
+    line-height: 1;
+    margin-top: 1px;
+}
+.side-badge {
+    background-color: #0b1120;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: #94a3b8;
+    font-size: 0.84rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
-# ---------------- 側邊欄：始終由用戶主動上傳影片 ----------------
+# ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
 uploaded_file = st.sidebar.file_uploader(
     "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
@@ -234,10 +245,9 @@ if st.sidebar.button("🗑️ 清空快取並重設 (Reset All)", use_container_
 
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
-st.markdown('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>', unsafe_allow_html=True)
+render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
 if uploaded_file is None:
-    # 當沒有上傳影片或用戶點擊了 (x)，立刻刪除舊快取，不讓舊影片殘留
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
         if k in st.session_state:
             del st.session_state[k]
@@ -250,7 +260,7 @@ video_bytes = uploaded_file.getvalue()
 
 # ---------------- 分析影片 (僅在更換新影片時執行一次) ----------------
 if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
-    with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (僅需分析一次)..."):
+    with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (分析約需 4~6 秒，分析後即快取)..."):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
             tfile.write(video_bytes)
             video_path = tfile.name
@@ -307,13 +317,12 @@ def start_playback():
         st.session_state.video_frame = 0
     st.session_state.is_playing = True
 
-# 關鍵修正：點擊暫停時，補償網絡飛行延遲，精確定格在學生按下當下看見的影格
 def stop_playback():
     st.session_state.is_playing = False
     st.session_state.video_frame = max(0, st.session_state.video_frame - 1)
 
 
-# ---------------- 播放推進步進 (逐 1 幀前進，杜絕多幀跳步延遲) ----------------
+# ---------------- 播放推進步進 (逐 1 幀前進) ----------------
 if st.session_state.is_playing:
     if st.session_state.video_frame < total_frames - 1:
         st.session_state.video_frame += 1
@@ -340,10 +349,9 @@ with b5:
 progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames - 1))
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
-st.markdown(
+render_html(
     f'<div class="play-progress-label">🎥 播放進度：第 <b>{st.session_state.video_frame}</b> / {total_frames - 1} 幀 ({int(progress_ratio * 100)}%) '
-    f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>',
-    unsafe_allow_html=True
+    f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>'
 )
 
 col_play, col_slider = st.columns([1, 16], gap="small")
@@ -405,18 +413,17 @@ with col_video:
     pil_img.save(buffered, format="JPEG", quality=80)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
 
-    st.markdown(
+    render_html(
         f'''
         <div style="display: flex; justify-content: center; width: 100%;">
             <img src="data:image/jpeg;base64,{img_b64}" 
                  style="max-height: 560px; width: 100%; object-fit: contain; border-radius: 14px; background-color: #0b1120;" />
         </div>
-        ''',
-        unsafe_allow_html=True
+        '''
     )
 
 with col_panel:
-    st.markdown(f"""
+    render_html(f"""
     <div class="side-card-compact">
         <div class="side-item-compact" style="border-left-color: #f43f5e;">
             <div class="side-row-layout">
@@ -485,10 +492,10 @@ with col_panel:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
 
-# ---------------- 播放輪詢 (50ms 節奏，平滑前進且反應即時) ----------------
+# ---------------- 播放輪詢 (50ms 節奏) ----------------
 if st.session_state.is_playing:
     time.sleep(0.05)
     st.rerun()
