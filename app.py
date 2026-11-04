@@ -3,7 +3,8 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 透過非阻塞式前端事件監聽，手指或滑鼠碰觸時間軸瞬間停止背景輪詢，100% 消除搶幀衝突
+- 拖曳時間軸紅條時，上方進度文字（幀數與百分比）0 延遲即時聯動更新 (Live-update)
+- 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -158,7 +159,7 @@ div[data-testid="stSlider"] [role="slider"] {
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
-/* 非阻塞隱藏輔助 iframe，防止版面留白，同時絕不阻斷前端通訊握手 */
+/* 非阻塞隱藏輔助 iframe，防止版面留白 */
 div[data-testid="stCustomComponentV1"] {
     height: 0px !important;
     min-height: 0px !important;
@@ -274,7 +275,7 @@ iframe[data-testid="stCustomComponentV1"] {
 </style>
 """)
 
-# ---------------- 前端事件捕獲：碰觸時間軸瞬間暫停播放，徹底解決搶幀 ----------------
+# ---------------- 前端事件捕獲與即時聯動監聽 ----------------
 components.html(
     """
     <script>
@@ -283,24 +284,69 @@ components.html(
             const parentDoc = window.parent.document;
             if (!parentDoc) return;
 
-            if (window.parent._stSliderTouchRegistered) return;
-            window.parent._stSliderTouchRegistered = true;
+            // 1. 碰觸滑桿瞬間暫停播放，防止搶幀
+            if (!window.parent._stSliderTouchRegistered) {
+                window.parent._stSliderTouchRegistered = true;
+                const onSliderTouch = function(e) {
+                    const slider = e.target.closest('[data-testid="stSlider"]');
+                    if (!slider) return;
 
-            const onSliderTouch = function(e) {
-                const slider = e.target.closest('[data-testid="stSlider"]');
+                    const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
+                                    parentDoc.querySelector('button[kind="primary"]');
+                    if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
+                        stopBtn.click();
+                    }
+                };
+
+                parentDoc.addEventListener('pointerdown', onSliderTouch, true);
+                parentDoc.addEventListener('touchstart', onSliderTouch, true);
+                parentDoc.addEventListener('mousedown', onSliderTouch, true);
+            }
+
+            // 2. 拖曳紅條時，進度文字 0 延遲即時更新 (Live-update)
+            function setupLiveSync() {
+                const slider = parentDoc.querySelector('[data-testid="stSlider"]');
                 if (!slider) return;
 
-                const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
-                                parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
-                    stopBtn.click();
-                }
-            };
+                const thumb = slider.querySelector('[role="slider"]');
+                if (!thumb) return;
 
-            // 在事件捕獲階段攔截，搶在 React 前端接收到數值變動前立即暫停後端推進
-            parentDoc.addEventListener('pointerdown', onSliderTouch, true);
-            parentDoc.addEventListener('touchstart', onSliderTouch, true);
-            parentDoc.addEventListener('mousedown', onSliderTouch, true);
+                const lblFrame = parentDoc.getElementById('lbl-cur-frame');
+                const lblPct = parentDoc.getElementById('lbl-cur-pct');
+
+                function update() {
+                    const now = thumb.getAttribute('aria-valuenow');
+                    if (now === null || now === undefined) return;
+                    const cur = parseInt(now, 10);
+                    if (isNaN(cur)) return;
+                    const maxVal = parseInt(thumb.getAttribute('aria-valuemax') || '151', 10);
+                    const pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
+                    
+                    if (lblFrame && lblFrame.textContent !== String(cur)) {
+                        lblFrame.textContent = cur;
+                    }
+                    if (lblPct && lblPct.textContent !== (pct + '%')) {
+                        lblPct.textContent = pct + '%';
+                    }
+                }
+
+                if (!thumb._liveObs) {
+                    thumb._liveObs = new MutationObserver(update);
+                    thumb._liveObs.observe(thumb, { attributes: true, attributeFilter: ['aria-valuenow'] });
+                }
+
+                if (!slider._liveEvents) {
+                    slider._liveEvents = true;
+                    slider.addEventListener('pointermove', update, { passive: true });
+                    slider.addEventListener('touchmove', update, { passive: true });
+                    slider.addEventListener('mousemove', update, { passive: true });
+                }
+            }
+
+            setupLiveSync();
+            if (!window.parent._stSliderInterval) {
+                window.parent._stSliderInterval = setInterval(setupLiveSync, 200);
+            }
         } catch (err) {
             console.error("Slider listener init error:", err);
         }
@@ -427,7 +473,7 @@ progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
 render_html(
-    f'<div class="play-progress-label">🎥 播放進度：第 <b>{st.session_state.video_frame}</b> / {total_frames - 1} 幀 ({int(progress_ratio * 100)}%) '
+    f'<div class="play-progress-label">🎥 播放進度：第 <b id="lbl-cur-frame">{st.session_state.video_frame}</b> / <span id="lbl-total-frames">{total_frames - 1}</span> 幀 (<span id="lbl-cur-pct">{int(progress_ratio * 100)}%</span>) '
     f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>'
 )
 
