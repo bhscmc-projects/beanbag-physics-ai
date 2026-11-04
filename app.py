@@ -1,10 +1,11 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 徹底隱藏右上角 (Fork、GitHub 貓咪、三點選單、彩虹裝飾條)
-- 將右下角所有徽章與按鈕設為 100% 透明與同色隱形，杜絕干擾
-- 徹底移除 components.html 模組，100% 根除 iPadOS Safari 的 "importing a module script failed" 報錯
+- 全面優化 iPad / 平板兼容性，相容 iOS/iPadOS WebKit
+- 只精確隱藏右上角 Fork 與 GitHub 標誌，保留左上角側邊欄展開鈕，防止平板側欄鎖死
+- 主畫面與側邊欄雙重上傳入口，平板學生操作 100% 友善
+- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，杜絕狀態衝突
+- 支援 iPad 原生 .mov 影片解碼與及時記憶體回收
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -56,7 +57,7 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 1. 徹底刪除頂部右上角：Fork、GitHub 貓咪、三點選單、彩虹條 ---------------- */
+/* ---------------- 1. 隱藏右上角 Fork、GitHub 貓咪、三點選單（保留左上側欄展開鈕） ---------------- */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -67,24 +68,22 @@ h1 {
     visibility: hidden !important;
     height: 0px !important;
 }
-header,
-header[data-testid="stHeader"],
 header [data-testid="stHeaderActionElements"],
 header [data-testid="stToolbar"],
 .stForkButton,
 .stAppDeployButton {
     display: none !important;
     visibility: hidden !important;
-    height: 0px !important;
 }
-
-/* ---------------- 2. 將右下角 GitHub / Streamlit 圖示徹底設為透明與不可見 ---------------- */
-footer,
-[data-testid="stFooter"] {
+header[data-testid="stHeader"] {
+    background: transparent !important;
+}
+footer {
     display: none !important;
     visibility: hidden !important;
 }
 
+/* ---------------- 2. 將右下角所有標籤設為透明隱形 ---------------- */
 [data-testid="manage-app-button"],
 #manage-app-button,
 .manage-app-button,
@@ -101,24 +100,9 @@ div[class*="StatusWidget"],
     opacity: 0 !important;
     color: transparent !important;
     background: transparent !important;
-    background-color: transparent !important;
     pointer-events: none !important;
     height: 0px !important;
     width: 0px !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-/* 右下角同色防漏遮罩，確保 100% 隱形 */
-.bottom-right-shield {
-    position: fixed !important;
-    bottom: 0px !important;
-    right: 0px !important;
-    width: 250px !important;
-    height: 60px !important;
-    background-color: #0e1117 !important;
-    z-index: 99999999 !important;
-    pointer-events: none !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -323,21 +307,34 @@ div[data-testid="stSlider"] [role="slider"] {
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
-uploaded_file = st.sidebar.file_uploader(
+uploaded_file_sidebar = st.sidebar.file_uploader(
     "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
-    type=["mov", "mp4"]
+    type=["mov", "mp4"],
+    key="uploader_sidebar"
 )
 
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
+uploaded_file = uploaded_file_sidebar
+
+# 未上傳時提示（若 iPad 側欄收合，直接在主畫面顯示上傳按鈕）
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
         if k in st.session_state:
             del st.session_state[k]
+    
     st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
-    st.stop()
+    uploaded_file_main = st.file_uploader(
+        "📱 若 iPad 側邊欄已收合，可直接點擊此處上傳影片 (.MOV / .MP4)：",
+        type=["mov", "mp4"],
+        key="uploader_main"
+    )
+    if uploaded_file_main is not None:
+        uploaded_file = uploaded_file_main
+    else:
+        st.stop()
 
 file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
 video_bytes = uploaded_file.getvalue()
@@ -345,13 +342,31 @@ video_bytes = uploaded_file.getvalue()
 
 # ---------------- 分析影片 (僅在更換新影片時執行一次) ----------------
 if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
-    with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (分析約需 4~6 秒，分析後即快取)..."):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
-            tfile.write(video_bytes)
-            video_path = tfile.name
+    for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data"]:
+        if k in st.session_state:
+            del st.session_state[k]
+    import gc
+    gc.collect()
 
-        tracker = BeanbagTracker()
-        raw_frames, fps, trajectory = tracker.track_video(video_path, method="HSV")
+    with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (分析約需 3~5 秒)..."):
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        if ext not in [".mp4", ".mov"]:
+            ext = ".mp4"
+
+        video_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tfile:
+                tfile.write(video_bytes)
+                video_path = tfile.name
+
+            tracker = BeanbagTracker()
+            raw_frames, fps, trajectory = tracker.track_video(video_path, method="HSV")
+        finally:
+            if video_path and os.path.exists(video_path):
+                try:
+                    os.remove(video_path)
+                except Exception:
+                    pass
 
         if len(raw_frames) == 0:
             st.error("無法解析影片，請確認影片格式為支援的 MP4/MOV。")
