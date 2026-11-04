@@ -1,6 +1,7 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 自動檢測並強制重定向至 /?embed=true 純淨模式，徹底拔除右下角 (< Manage app、GitHub 圖示、Streamlit 紅冠)
+- 透過前端 JS 自動重定向至 /?embed=true 純淨模式，徹底拔除右下角 (< Manage app、GitHub 圖示、Streamlit 紅冠)
+- 移除會拋出 StreamlitAPIException 的 st.query_params["embed"] 後端賦值
 - 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
@@ -33,11 +34,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------- 自動重定向至純淨模式 (?embed=true) ----------------
-# 只要網址未帶 embed=true，立即無感自動跳轉，徹底消滅右下角所有 Manage app 與 GitHub/Streamlit 標誌
-if "embed" not in st.query_params or st.query_params["embed"] != "true":
-    st.query_params["embed"] = "true"
-    st.rerun()
+# ---------------- 前端安全自動導向純淨模式 (?embed=true) ----------------
+# 透過前端 JS 無感置換網址，繞過 Python 後端限制，徹底由雲端主機層消除右下角按鈕與徽章
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            if (window.top && window.top.location) {
+                var search = window.top.location.search || '';
+                if (search.indexOf('embed=true') === -1) {
+                    var newUrl = window.top.location.pathname + '?embed=true';
+                    window.top.location.replace(newUrl);
+                }
+            }
+        } catch (e) {
+            console.log("Embed redirect error:", e);
+        }
+    })();
+    </script>
+    """,
+    height=0,
+)
 
 # 輔助函式：安全注入純 HTML/CSS
 def render_html(html_str: str):
