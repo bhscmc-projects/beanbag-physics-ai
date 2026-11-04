@@ -1,8 +1,8 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 透過前端 JS 自動重定向至 /?embed=true 純淨模式，徹底拔除右下角 (< Manage app、GitHub 圖示、Streamlit 紅冠)
-- 移除會拋出 StreamlitAPIException 的 st.query_params["embed"] 後端賦值
-- 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
+- 移除報錯的 st.query_params["embed"]，徹底解決 StreamlitAPIException
+- 加入右下角同色物理遮罩與全局 DOM 清理器，100% 隱蔽 < Manage app、GitHub 頭像與 Streamlit 紅冠按鈕
+- 隱藏頂部所有開發者控制列 (Share/Edit/Fork/GitHub/MainMenu)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
 - 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
@@ -34,36 +34,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------- 前端安全自動導向純淨模式 (?embed=true) ----------------
-# 透過前端 JS 無感置換網址，繞過 Python 後端限制，徹底由雲端主機層消除右下角按鈕與徽章
-components.html(
-    """
-    <script>
-    (function() {
-        try {
-            if (window.top && window.top.location) {
-                var search = window.top.location.search || '';
-                if (search.indexOf('embed=true') === -1) {
-                    var newUrl = window.top.location.pathname + '?embed=true';
-                    window.top.location.replace(newUrl);
-                }
-            }
-        } catch (e) {
-            console.log("Embed redirect error:", e);
-        }
-    })();
-    </script>
-    """,
-    height=0,
-)
-
 # 輔助函式：安全注入純 HTML/CSS
 def render_html(html_str: str):
     clean_lines = [line.strip() for line in html_str.splitlines() if line.strip()]
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式 ----------------
+# ---------------- 全局 CSS 樣式與右下角遮罩 ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -82,23 +59,56 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* 頂部彩色裝飾條與選單清理 */
-[data-testid="stDecoration"] {
-    display: none !important;
-    visibility: hidden !important;
-}
+/* ---------------- 1. 隱藏頂部所有開發者工具 (Share, Edit, Fork, GitHub, MainMenu, 裝飾條) ---------------- */
+[data-testid="stDecoration"],
 #MainMenu,
-header [data-testid="stHeaderActionElements"],
-header [data-testid="stToolbar"],
+header,
+header[data-testid="stHeader"],
+[data-testid="stHeaderActionElements"],
+[data-testid="stToolbar"],
 .stForkButton,
 .stAppDeployButton {
     display: none !important;
     visibility: hidden !important;
+    height: 0px !important;
 }
+
+/* ---------------- 2. 隱藏預設頁尾 ---------------- */
 footer,
 [data-testid="stFooter"] {
     display: none !important;
     visibility: hidden !important;
+}
+
+/* ---------------- 3. 右下角物理同色遮罩 (終極隱形法：直接覆蓋紅冠、頭像與 Manage app) ---------------- */
+.bottom-right-cover-mask {
+    position: fixed !important;
+    bottom: 0px !important;
+    right: 0px !important;
+    width: 250px !important;
+    height: 65px !important;
+    background-color: #0e1117 !important;
+    z-index: 999999999 !important;
+    pointer-events: none !important;
+    border: none !important;
+}
+
+/* 嘗試隱藏所有已知的雲端按鈕選擇器 */
+[data-testid="manage-app-button"],
+#manage-app-button,
+.manage-app-button,
+[class*="viewerBadge"],
+div[class*="viewerBadge"],
+a[class*="viewerBadge"],
+div[class*="StatusWidget"],
+[data-testid="stStatusWidget"],
+.stStatusWidget {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    height: 0px !important;
+    width: 0px !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -312,7 +322,48 @@ iframe[data-testid="stCustomComponentV1"] {
     white-space: nowrap;
 }
 </style>
+<div class="bottom-right-cover-mask"></div>
 """)
+
+# ---------------- 置於頂部的 DOM 掃蕩器（未上傳影片狀態下立刻執行） ----------------
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            function sweepBadges() {
+                var docs = [document];
+                try { if (window.parent && window.parent.document) docs.push(window.parent.document); } catch(e) {}
+                try { if (window.top && window.top.document) docs.push(window.top.document); } catch(e) {}
+
+                docs.forEach(function(d) {
+                    try {
+                        var buttons = d.querySelectorAll('button, div, a, span');
+                        for (var i = 0; i < buttons.length; i++) {
+                            var el = buttons[i];
+                            if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {
+                                var box = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
+                                box.style.setProperty('display', 'none', 'important');
+                                box.style.setProperty('visibility', 'hidden', 'important');
+                            }
+                        }
+                        var badges = d.querySelectorAll('[class*="viewerBadge"], [data-testid="manage-app-button"], [data-testid="stStatusWidget"], div[class*="StatusWidget"]');
+                        for (var j = 0; j < badges.length; j++) {
+                            badges[j].style.setProperty('display', 'none', 'important');
+                            badges[j].style.setProperty('visibility', 'hidden', 'important');
+                        }
+                    } catch(err) {}
+                });
+            }
+
+            sweepBadges();
+            setInterval(sweepBadges, 100);
+        } catch(e) {}
+    })();
+    </script>
+    """,
+    height=0,
+)
 
 
 # ---------------- 側邊欄：影片上傳 ----------------
