@@ -1,11 +1,12 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 解決雲端播放不更新影格問題 (加入播放鎖定保護，防止 slider on_change 誤暫停)
-- 採用輕量 JPEG 傳輸，確保雲端 25 FPS 影片播放流暢不卡頓
-- 快取影片分析數據至 session_state，拖動滑桿與播放零延遲
+- 支援內建示範影片 (input.mp4) 自動備援，無需每次重新上傳，開箱即用
+- 解決雲端 WebSocket 斷連與上傳 500 錯誤
+- 快取影片分析數據至 session_state，零延遲即時拖曳與平滑播放
 - 淺褐色圓形按鈕、居中滑桿、1:1 佈局
 """
 
+import os
 import tempfile
 import time
 import cv2
@@ -229,29 +230,40 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------- 側邊欄：上傳影片 ----------------
-st.sidebar.title("📁 實驗影片上傳")
+# ---------------- 側邊欄：影片上傳與示範備援 ----------------
+st.sidebar.title("📁 實驗影片設定")
 uploaded_file = st.sidebar.file_uploader(
-    "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
+    "上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
     type=["mov", "mp4"]
 )
+
+demo_file_path = "input.mp4"
+has_demo = os.path.exists(demo_file_path)
 
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 st.markdown('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>', unsafe_allow_html=True)
 
-if uploaded_file is None:
+# 判斷影片來源 (支援無上傳時自動載入內建 input.mp4)
+if uploaded_file is not None:
+    file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
+    video_bytes = uploaded_file.getvalue()
+    st.sidebar.success(f"✅ 已載入上傳影片：{uploaded_file.name}")
+elif has_demo:
+    file_id = "default_demo_input_mp4"
+    with open(demo_file_path, "rb") as f:
+        video_bytes = f.read()
+    st.info("💡 提示：現正使用內建模擬示範影片 (input.mp4)。如需分析新影片，請於左側欄上傳。")
+else:
     st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
     st.stop()
 
 
-# ---------------- 快取機制：分析僅執行一次，快取至 session_state ----------------
-file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-
+# ---------------- 快取機制：僅在更換影片時分析一次 ----------------
 if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
     with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (僅需分析一次)..."):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
-            tfile.write(uploaded_file.getvalue())
+            tfile.write(video_bytes)
             video_path = tfile.name
 
         tracker = BeanbagTracker()
@@ -274,7 +286,7 @@ if "cached_file_id" not in st.session_state or st.session_state.cached_file_id !
         st.session_state.is_playing = False
         st.session_state.is_advancing_playback = False
 
-# 讀取快取數據
+# 讀取快取數據 (0 延遲，不重複處理)
 frames = st.session_state.cached_frames
 fps = st.session_state.cached_fps
 trajectory = st.session_state.cached_trajectory
@@ -309,18 +321,17 @@ def toggle_playback():
     if st.session_state.is_playing:
         st.session_state.is_playing = False
     else:
-        # 如果已經在最後一幀，重新從第 0 幀播放
         if st.session_state.video_frame >= total_frames - 1:
             st.session_state.video_frame = 0
         st.session_state.is_playing = True
 
 def on_slider_change():
-    # 核心保護：只有當「學生手動拖動滑桿」時才暫停，播放中的自動推進絕不誤觸暫停
+    # 只有學生手動拖曳滑桿時才停止播放
     if not st.session_state.get("is_advancing_playback", False):
         st.session_state.is_playing = False
 
 
-# ---------------- 播放步進邏輯 ----------------
+# ---------------- 播放推進步進 ----------------
 if st.session_state.is_playing:
     if st.session_state.video_frame < total_frames - 1:
         st.session_state.is_advancing_playback = True
@@ -374,7 +385,6 @@ with col_slider:
         on_change=on_slider_change
     )
 
-# 渲染完成後解除推進保護
 st.session_state.is_advancing_playback = False
 
 # 當前幀數據
@@ -415,8 +425,8 @@ with col_video:
     elif selected_f == apex_f:
         draw.ellipse([(cx - 10, cy - 10), (cx + 10, cy + 10)], fill="#eab308")
 
-    # 關鍵：採用 JPEG 壓縮傳輸，由 300KB 降至 35KB，確保雲端 25 FPS 影片播放流暢不卡頓
-    st.image(pil_img, use_container_width=True, output_format="JPEG")
+    # 輸出 JPEG 輕量傳輸 (由 CSS 控制 100% 容器寬度)
+    st.image(pil_img, output_format="JPEG")
 
 with col_panel:
     st.markdown(f"""
@@ -491,7 +501,7 @@ with col_panel:
     """, unsafe_allow_html=True)
 
 
-# ---------------- 播放輪詢 (穩定 20-25 FPS 慢動作) ----------------
+# ---------------- 播放輪詢 (穩定慢動作節奏) ----------------
 if st.session_state.is_playing:
     time.sleep(0.045)
     st.rerun()
