@@ -1,9 +1,9 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 使用無害純淨的 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯) 與 Markdown 縮排程式碼區塊問題
-- 採用 Base64 內嵌影像，確保時間軸與影片影格 100% 即時同步
+- 使用純淨 st.markdown 注入 HTML/CSS，徹底解決動態模組載入錯誤 (Html.js 報錯)
+- 移除所有不穩定 iframe 元件，徹底消除加載卡死問題
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 透過 components.html 注入真實 DOM pointerdown/touchstart 監聽，碰觸滑桿瞬間暫停，徹底杜絕拖曳搶幀 Bug
+- 播放步進邏輯置於腳本最底層，保證用戶手動拖曳時間軸享有最高響應優先級，即拖即鎖定
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -15,7 +15,6 @@ import time
 import cv2
 import numpy as np
 import streamlit as st
-import streamlit.components.v1 as components
 from PIL import Image, ImageDraw
 
 from tracker import BeanbagTracker
@@ -158,21 +157,6 @@ div[data-testid="stSlider"] [role="slider"] {
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
-/* 隱藏 components.html 輔助 iframe，不留任何空白 */
-iframe[height="0"] {
-    display: none !important;
-    position: absolute !important;
-    height: 0 !important;
-    width: 0 !important;
-    border: none !important;
-}
-div:has(> iframe[height="0"]) {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
 /* 側邊數據看板：1:1 佈局 */
 .side-card-compact {
     background-color: #0f172a;
@@ -274,42 +258,6 @@ div:has(> iframe[height="0"]) {
 </style>
 """)
 
-# ---------------- 前端事件監聽：碰觸滑桿瞬間立即暫停播放 ----------------
-components.html(
-    """
-    <script>
-    (function() {
-        try {
-            const parentDoc = window.parent.document;
-            if (!parentDoc) return;
-
-            if (window.parent._stSliderTouchHook) return;
-            window.parent._stSliderTouchHook = true;
-
-            const pausePlayback = function(e) {
-                const slider = e.target.closest('[data-testid="stSlider"]');
-                if (!slider) return;
-
-                const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
-                                parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
-                    stopBtn.click();
-                }
-            };
-
-            parentDoc.addEventListener('pointerdown', pausePlayback, true);
-            parentDoc.addEventListener('mousedown', pausePlayback, true);
-            parentDoc.addEventListener('touchstart', pausePlayback, true);
-        } catch(err) {
-            console.error("Slider sync listener error:", err);
-        }
-    })();
-    </script>
-    """,
-    height=0,
-    width=0,
-)
-
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
@@ -372,7 +320,7 @@ apex_f = physics_data["apex_f"]
 end_f = physics_data["end_f"]
 
 
-# ---------------- 播放狀態與明確控制 ----------------
+# ---------------- 播放狀態與控制函式 ----------------
 if "video_frame" not in st.session_state or st.session_state.video_frame >= total_frames:
     st.session_state.video_frame = int(apex_f)
 
@@ -396,16 +344,8 @@ def stop_playback():
     st.session_state.is_playing = False
 
 def on_slider_change():
+    # 用戶手動拖曳時間軸滑桿時，立即暫停播放，時間軸與數值瞬間鎖定
     st.session_state.is_playing = False
-
-
-# ---------------- 播放推進步進 (逐 1 幀前進) ----------------
-if st.session_state.is_playing:
-    if st.session_state.video_frame < total_frames - 1:
-        st.session_state.video_frame += 1
-    else:
-        st.session_state.video_frame = total_frames - 1
-        st.session_state.is_playing = False
 
 
 # ---------------- 5 個微調按鈕 ----------------
@@ -573,7 +513,12 @@ with col_panel:
     """)
 
 
-# ---------------- 播放輪詢 (50ms 節奏) ----------------
+# ---------------- 播放輪詢與推進 (置於最底層：確保用戶手動拖曳滑桿與點擊微調具有最高響應優先級) ----------------
 if st.session_state.is_playing:
-    time.sleep(0.05)
+    if st.session_state.video_frame < total_frames - 1:
+        st.session_state.video_frame += 1
+    else:
+        st.session_state.video_frame = total_frames - 1
+        st.session_state.is_playing = False
+    time.sleep(0.08)
     st.rerun()
