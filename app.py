@@ -1,5 +1,6 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
+- 使用 session_state 快取影片分析數據，徹底解決重複逐幀分析的延遲問題
 - 淺褐色高辨識度圓形播放/暫停按鈕
 - 可直接拖動跳轉的影片播放進度時間軸 (Scrubber Slider)
 - 紅色滑桿線精確橫切圓形按鈕正中心 (Vertical Center Alignment)
@@ -109,9 +110,9 @@ st.markdown("""
         margin-bottom: 2px;
     }
 
-    /* 核心調整：讓紅色滑桿軌道下移，剛好切入 48px 棕色按鈕的正中心 (24px 處) */
+    /* 紅色滑桿軌道垂直居中微調 */
     div[data-testid="stSlider"] {
-        padding-top: 5px !important;
+        padding-top: 19px !important;
         margin-top: 0 !important;
     }
 
@@ -246,23 +247,44 @@ if uploaded_file is None:
     st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
     st.stop()
 
-tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-tfile.write(uploaded_file.read())
-video_path = tfile.name
 
-tracker = BeanbagTracker()
+# ---------------- 關鍵快取機制：分析僅執行一次，快取至 session_state ----------------
+file_id = f"{uploaded_file.name}_{uploaded_file.size}"
 
-with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能..."):
-    frames, fps, trajectory = tracker.track_video(video_path, method="HSV")
+if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
+    with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (僅需分析一次)..."):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
+            tfile.write(uploaded_file.getvalue())
+            video_path = tfile.name
+
+        tracker = BeanbagTracker()
+        raw_frames, fps, trajectory = tracker.track_video(video_path, method="HSV")
+
+        if len(raw_frames) == 0:
+            st.error("無法解析影片，請確認影片格式為支援的 MP4/MOV。")
+            st.stop()
+
+        smoothed_y = smooth_and_interpolate(trajectory["y"], trajectory["valid"])
+        physics_data = calculate_real_frame_physics(smoothed_y, trajectory["valid"], fps)
+
+        # 寫入 Session State
+        st.session_state.cached_frames = raw_frames
+        st.session_state.cached_fps = fps
+        st.session_state.cached_trajectory = trajectory
+        st.session_state.cached_smoothed_y = smoothed_y
+        st.session_state.cached_physics_data = physics_data
+        st.session_state.cached_file_id = file_id
+        st.session_state.video_frame = int(physics_data["apex_f"])
+        st.session_state.is_playing = False
+
+# 讀取快取數據（零延遲，不再重跑 OpenCV）
+frames = st.session_state.cached_frames
+fps = st.session_state.cached_fps
+trajectory = st.session_state.cached_trajectory
+smoothed_y = st.session_state.cached_smoothed_y
+physics_data = st.session_state.cached_physics_data
 
 total_frames = len(frames)
-if total_frames == 0:
-    st.error("無法解析影片，請確認影片格式為支援的 MP4/MOV。")
-    st.stop()
-
-smoothed_y = smooth_and_interpolate(trajectory["y"], trajectory["valid"])
-physics_data = calculate_real_frame_physics(smoothed_y, trajectory["valid"], fps)
-
 start_f = physics_data["start_f"]
 apex_f = physics_data["apex_f"]
 end_f = physics_data["end_f"]
@@ -296,7 +318,7 @@ def on_slider_change():
     st.session_state.is_playing = False
 
 
-# ---------------- 在 Slider 實例化之前前進影格，確保播放流暢無報錯 ----------------
+# ---------------- 播放步進（在 Slider 實例化前執行） ----------------
 if st.session_state.is_playing:
     if st.session_state.get("play_just_started", False):
         st.session_state.play_just_started = False
@@ -321,7 +343,7 @@ with b5:
     st.button("⏭ 接住豆袋", on_click=jump_to_frame, args=(end_f,), use_container_width=True)
 
 
-# ---------------- 淺褐色播放按鈕與紅線精確居中的播放時間軸 ----------------
+# ---------------- 播放按鈕與進度滑桿 ----------------
 progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames - 1))
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
@@ -351,7 +373,7 @@ with col_slider:
         on_change=on_slider_change
     )
 
-# 當前幀真實物理數據
+# 當前幀數據
 cur_h = physics_data["Ep"][selected_f]
 cur_speed = physics_data["speed_pct"][selected_f]
 cur_ep = physics_data["Ep"][selected_f]
@@ -360,13 +382,12 @@ cur_total = physics_data["Total"][selected_f]
 stage_name, speed_desc, height_desc = get_f1_stage_info(selected_f, start_f, apex_f, end_f)
 total_desc = "保持守恆 (100%)" if cur_total > 5 else "靜止於手中 (0%)"
 
-# 橫向長條圖長度
 h_bar_pct = max(0.0, min(100.0, float(cur_h)))
 speed_bar_pct = max(0.0, min(100.0, float(cur_speed)))
 total_bar_pct = max(0.0, min(100.0, float(cur_total)))
 
 
-# ---------------- 1:1 佈局：影片畫面與數據看板嚴格各佔 50% ----------------
+# ---------------- 1:1 佈局 ----------------
 col_video, col_panel = st.columns([1, 1], gap="medium")
 
 with col_video:
@@ -465,7 +486,7 @@ with col_panel:
     """, unsafe_allow_html=True)
 
 
-# ---------------- 播放循環 ----------------
+# ---------------- 播放輪詢 ----------------
 if st.session_state.is_playing:
-    time.sleep(0.04)  # 25 fps 流暢播放
+    time.sleep(0.04)  # 25 fps
     st.rerun()
