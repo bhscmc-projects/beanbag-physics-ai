@@ -1,15 +1,16 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 使用 st.html() 注入 CSS 與 HTML，徹底解決 Markdown 將 CSS 誤渲染為程式碼區塊的問題
-- 採用 Base64 內嵌影像，確保紅條滑桿與影片影格 100% 即時同步
-- 消除停止按鈕延遲，即按即停
+- 使用無害純淨的 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯) 與 Markdown 縮排程式碼區塊問題
+- 採用 Base64 內嵌影像，確保時間軸與影片影格 100% 即時同步
+- 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
+- 注入前端 pointerdown 零延遲監聽，播放中點擊或拖曳紅條即刻暫停，徹底根除搶幀卡頓 Bug
+- 刪除側邊欄重設按鈕，介面簡潔直覺
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
 import os
 import io
 import base64
-import textwrap
 import tempfile
 import time
 import cv2
@@ -40,7 +41,8 @@ def render_html(html_str: str):
     clean_lines = [line.strip() for line in html_str.splitlines() if line.strip()]
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
-# ---------------- 全局 CSS 樣式 ----------------
+
+# ---------------- 全局 CSS 樣式與前端防搶幀監聽 ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -125,10 +127,35 @@ button[kind="primary"] p {
     margin-bottom: 2px;
 }
 
-/* 紅色滑桿軌道垂直居中 */
+/* 播放控制列整行垂直完美居中 */
+div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) {
+    align-items: center !important;
+}
+
+/* 紅色滑桿向上提昇並精確垂直居中 */
 div[data-testid="stSlider"] {
-    padding-top: 19px !important;
-    margin-top: 0 !important;
+    padding-top: 0px !important;
+    margin-top: -6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+/* 垂直增加紅條高度/厚度至 8px，並設為圓角 */
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
+    height: 8px !important;
+    border-radius: 4px !important;
+}
+div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
+    height: 8px !important;
+    border-radius: 4px !important;
+}
+
+/* 增大拖曳圓點至 20px，發光手感提升 */
+div[data-testid="stSlider"] [role="slider"] {
+    width: 20px !important;
+    height: 20px !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
 /* 側邊數據看板：1:1 佈局 */
@@ -230,6 +257,28 @@ div[data-testid="stSlider"] {
     white-space: nowrap;
 }
 </style>
+
+<!-- 前端事件監聽：當滑鼠按下或接觸到滑桿時，瞬間暫停播放，徹底解決搶幀 Bug -->
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+     onload="
+        if (!window._stSliderSyncAttached) {
+            window._stSliderSyncAttached = true;
+            var pauseIfPlaying = function(e) {
+                var s = e.target.closest('[data-testid=stSlider]');
+                if (s) {
+                    var btn = document.querySelector('.st-key-btn_stop_circle button') ||
+                              document.querySelector('button[kind=primary]');
+                    if (btn && (btn.innerText.indexOf('⏸') !== -1 || btn.textContent.indexOf('⏸') !== -1)) {
+                        btn.click();
+                    }
+                }
+            };
+            document.addEventListener('pointerdown', pauseIfPlaying, true);
+            document.addEventListener('keydown', function(e) {
+                if (e.key && e.key.indexOf('Arrow') === 0) pauseIfPlaying(e);
+            }, true);
+        }
+     " style="display:none;" />
 """)
 
 
@@ -368,7 +417,7 @@ with col_slider:
         min_value=0,
         max_value=total_frames - 1,
         key="video_frame",
-        on_change=on_slider_change,  # 👈 加上這一行！
+        on_change=on_slider_change,
         label_visibility="collapsed"
     )
 
