@@ -3,8 +3,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 使用無害純淨的 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯) 與 Markdown 縮排程式碼區塊問題
 - 採用 Base64 內嵌影像，確保時間軸與影片影格 100% 即時同步
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 注入前端 pointerdown 零延遲監聽，播放中點擊或拖曳紅條即刻暫停，徹底根除搶幀卡頓 Bug
-- 刪除側邊欄重設按鈕，介面簡潔直覺
+- 透過 components.html 注入真實 DOM pointerdown/touchstart 監聽，碰觸滑桿瞬間暫停，徹底杜絕拖曳搶幀 Bug
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -16,6 +15,7 @@ import time
 import cv2
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image, ImageDraw
 
 from tracker import BeanbagTracker
@@ -42,7 +42,7 @@ def render_html(html_str: str):
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式與前端防搶幀監聽 ----------------
+# ---------------- 全局 CSS 樣式 ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -141,7 +141,7 @@ div[data-testid="stSlider"] {
     justify-content: center !important;
 }
 
-/* 垂直增加紅條高度/厚度至 8px，並設為圓角 */
+/* 垂直加粗紅條厚度至 8px，並設圓角 */
 div[data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
     height: 8px !important;
     border-radius: 4px !important;
@@ -151,11 +151,26 @@ div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
     border-radius: 4px !important;
 }
 
-/* 增大拖曳圓點至 20px，發光手感提升 */
+/* 拖曳圓點增大至 20px，發光手感提升 */
 div[data-testid="stSlider"] [role="slider"] {
     width: 20px !important;
     height: 20px !important;
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
+}
+
+/* 隱藏 components.html 輔助 iframe，不留任何空白 */
+iframe[height="0"] {
+    display: none !important;
+    position: absolute !important;
+    height: 0 !important;
+    width: 0 !important;
+    border: none !important;
+}
+div:has(> iframe[height="0"]) {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* 側邊數據看板：1:1 佈局 */
@@ -257,29 +272,43 @@ div[data-testid="stSlider"] [role="slider"] {
     white-space: nowrap;
 }
 </style>
+""")
 
-<!-- 前端事件監聽：當滑鼠按下或接觸到滑桿時，瞬間暫停播放，徹底解決搶幀 Bug -->
-<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
-     onload="
-        if (!window._stSliderSyncAttached) {
-            window._stSliderSyncAttached = true;
-            var pauseIfPlaying = function(e) {
-                var s = e.target.closest('[data-testid=stSlider]');
-                if (s) {
-                    var btn = document.querySelector('.st-key-btn_stop_circle button') ||
-                              document.querySelector('button[kind=primary]');
-                    if (btn && (btn.innerText.indexOf('⏸') !== -1 || btn.textContent.indexOf('⏸') !== -1)) {
-                        btn.click();
-                    }
+# ---------------- 前端事件監聽：碰觸滑桿瞬間立即暫停播放 ----------------
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            const parentDoc = window.parent.document;
+            if (!parentDoc) return;
+
+            if (window.parent._stSliderTouchHook) return;
+            window.parent._stSliderTouchHook = true;
+
+            const pausePlayback = function(e) {
+                const slider = e.target.closest('[data-testid="stSlider"]');
+                if (!slider) return;
+
+                const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
+                                parentDoc.querySelector('button[kind="primary"]');
+                if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
+                    stopBtn.click();
                 }
             };
-            document.addEventListener('pointerdown', pauseIfPlaying, true);
-            document.addEventListener('keydown', function(e) {
-                if (e.key && e.key.indexOf('Arrow') === 0) pauseIfPlaying(e);
-            }, true);
+
+            parentDoc.addEventListener('pointerdown', pausePlayback, true);
+            parentDoc.addEventListener('mousedown', pausePlayback, true);
+            parentDoc.addEventListener('touchstart', pausePlayback, true);
+        } catch(err) {
+            console.error("Slider sync listener error:", err);
         }
-     " style="display:none;" />
-""")
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 
 
 # ---------------- 側邊欄：影片上傳 ----------------
@@ -365,10 +394,8 @@ def start_playback():
 
 def stop_playback():
     st.session_state.is_playing = False
-    st.session_state.video_frame = max(0, st.session_state.video_frame - 1)
 
 def on_slider_change():
-    # 當用戶手動拖曳時間軸滑桿時，立即停止播放迴圈，杜絕背景 50ms 推進與手動拖曳發生競態衝突
     st.session_state.is_playing = False
 
 
