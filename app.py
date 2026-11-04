@@ -1,8 +1,10 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 徹底移除白色 Fullscreen 橫條與多餘跳轉，恢復最穩定乾淨的暗黑教學介面
-- 遵循 Streamlit 官方規範，合法更新影格步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
+- 徹底隱藏右上角 (Fork、GitHub 貓咪、三點選單、彩虹裝飾條)
+- 將右下角所有徽章與按鈕設為 100% 透明與同色隱形，杜絕干擾
+- 徹底移除 components.html 模組，100% 根除 iPadOS Safari 的 "importing a module script failed" 報錯
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
+- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，杜絕狀態衝突
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -35,7 +37,7 @@ def render_html(html_str: str):
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式 (隱藏所有可隱藏的選單與標籤) ----------------
+# ---------------- 全局 CSS 樣式 ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -54,25 +56,69 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* 隱藏頂部所有開發者控制列 (Share, Fork, GitHub, MainMenu, 裝飾條) */
+/* ---------------- 1. 徹底刪除頂部右上角：Fork、GitHub 貓咪、三點選單、彩虹條 ---------------- */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
+    height: 0px !important;
 }
 #MainMenu {
     display: none !important;
     visibility: hidden !important;
+    height: 0px !important;
 }
-header[data-testid="stHeader"] {
+header,
+header[data-testid="stHeader"],
+header [data-testid="stHeaderActionElements"],
+header [data-testid="stToolbar"],
+.stForkButton,
+.stAppDeployButton {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0px !important;
+}
+
+/* ---------------- 2. 將右下角 GitHub / Streamlit 圖示徹底設為透明與不可見 ---------------- */
+footer,
+[data-testid="stFooter"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+[data-testid="manage-app-button"],
+#manage-app-button,
+.manage-app-button,
+[class*="viewerBadge"],
+div[class*="viewerBadge"],
+a[class*="viewerBadge"],
+div[class*="StatusWidget"],
+[data-testid="stStatusWidget"],
+.stStatusWidget,
+[class*="manageApp"],
+[class*="ManageApp"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    color: transparent !important;
+    background: transparent !important;
     background-color: transparent !important;
+    pointer-events: none !important;
+    height: 0px !important;
+    width: 0px !important;
+    border: none !important;
+    box-shadow: none !important;
 }
-header [data-testid="stHeaderActionElements"] {
-    display: none !important;
-    visibility: hidden !important;
-}
-footer {
-    display: none !important;
-    visibility: hidden !important;
+
+/* 右下角同色防漏遮罩，確保 100% 隱形 */
+.bottom-right-shield {
+    position: fixed !important;
+    bottom: 0px !important;
+    right: 0px !important;
+    width: 250px !important;
+    height: 60px !important;
+    background-color: #0e1117 !important;
+    z-index: 99999999 !important;
+    pointer-events: none !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -271,6 +317,7 @@ div[data-testid="stSlider"] [role="slider"] {
     white-space: nowrap;
 }
 </style>
+<div class="bottom-right-shield"></div>
 """)
 
 
@@ -449,7 +496,6 @@ with col_video:
     elif selected_f == apex_f:
         draw.ellipse([(cx - 10, cy - 10), (cx + 10, cy + 10)], fill="#eab308")
 
-    # 將圖像轉為 Base64 內嵌，消除非同步延遲
     buffered = io.BytesIO()
     pil_img.save(buffered, format="JPEG", quality=80)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
