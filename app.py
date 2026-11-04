@@ -1,9 +1,8 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 徹底移除不安全的外殼跳轉腳本，恢復 100% 穩定秒開
-- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
+- 徹底移除白色 Fullscreen 橫條與多餘跳轉，恢復最穩定乾淨的暗黑教學介面
+- 遵循 Streamlit 官方規範，合法更新影格步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 乾淨純粹的教學介面，支援直接以 ?embed=true 網址分享給學生
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -36,7 +35,7 @@ def render_html(html_str: str):
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式 ----------------
+# ---------------- 全局 CSS 樣式 (隱藏所有可隱藏的選單與標籤) ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -55,7 +54,7 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* 隱藏頂部彩虹裝飾條與預設選單 */
+/* 隱藏頂部所有開發者控制列 (Share, Fork, GitHub, MainMenu, 裝飾條) */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -66,6 +65,10 @@ h1 {
 }
 header[data-testid="stHeader"] {
     background-color: transparent !important;
+}
+header [data-testid="stHeaderActionElements"] {
+    display: none !important;
+    visibility: hidden !important;
 }
 footer {
     display: none !important;
