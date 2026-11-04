@@ -1,11 +1,11 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
+- 自動檢測並強制重定向至 /?embed=true 純淨模式，徹底拔除右下角 (< Manage app、GitHub 圖示、Streamlit 紅冠)
 - 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
 - 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
 - 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
-- 腳本頂部強制拔除右下角 (< Manage app、GitHub 圓形頭像、紅冠 Streamlit 徽章)，未上傳影片狀態下同樣 100% 隱形
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -33,13 +33,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ---------------- 自動重定向至純淨模式 (?embed=true) ----------------
+# 只要網址未帶 embed=true，立即無感自動跳轉，徹底消滅右下角所有 Manage app 與 GitHub/Streamlit 標誌
+if "embed" not in st.query_params or st.query_params["embed"] != "true":
+    st.query_params["embed"] = "true"
+    st.rerun()
+
 # 輔助函式：安全注入純 HTML/CSS
 def render_html(html_str: str):
-    """
-    1. 逐行去除前後空白 (line.strip())，徹底消除 4 格縮排，100% 杜絕 Markdown 誤判為程式碼區塊 (<pre><code>)。
-    2. 過濾純空行，防止 CommonMark 在空行處提早終止 HTML 區塊解析。
-    3. 絕不調用 st.html()，避免 Streamlit Cloud 動態模組載入失敗 (Failed to fetch dynamically imported module)。
-    """
     clean_lines = [line.strip() for line in html_str.splitlines() if line.strip()]
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
@@ -63,7 +64,7 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 徹底隱藏頂部與右下角的所有 Streamlit/Git 開發者介面 ---------------- */
+/* 頂部彩色裝飾條與選單清理 */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -80,26 +81,6 @@ footer,
 [data-testid="stFooter"] {
     display: none !important;
     visibility: hidden !important;
-}
-
-/* 徹底隱藏右下角 Manage App 按鈕、GitHub 圓形頭像徽章與紅色皇冠 Streamlit 徽章 */
-[data-testid="manage-app-button"],
-#manage-app-button,
-.manage-app-button,
-[class*="manageApp"],
-[class*="ManageApp"],
-[class*="viewerBadge"],
-div[class*="viewerBadge"],
-a[class*="viewerBadge"],
-div[class*="StatusWidget"],
-[data-testid="stStatusWidget"],
-.stStatusWidget {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    height: 0px !important;
-    width: 0px !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -315,54 +296,6 @@ iframe[data-testid="stCustomComponentV1"] {
 </style>
 """)
 
-# ---------------- 置於頂部的全局清理腳本（未上傳影片狀態下立即生效，徹底清除右下角按鈕與徽章） ----------------
-components.html(
-    """
-    <script>
-    (function() {
-        try {
-            var parentDoc = window.parent.document;
-            if (!parentDoc) return;
-
-            // 清理舊定時器
-            if (window.parent._stGlobalBadgeCleanTimer) {
-                window.parent.clearInterval(window.parent._stGlobalBadgeCleanTimer);
-            }
-
-            // 實時銷毀右下角 Manage App 按鈕、GitHub 頭像徽章與 Streamlit 紅冠
-            window.parent._stGlobalBadgeCleanTimer = window.parent.setInterval(function() {
-                try {
-                    // 1. 銷毀包含 Manage app 的任何按鈕或容器
-                    var allElements = parentDoc.querySelectorAll('button, div, a, span');
-                    for (var i = 0; i < allElements.length; i++) {
-                        var el = allElements[i];
-                        if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {
-                            var container = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
-                            container.style.setProperty('display', 'none', 'important');
-                            container.style.setProperty('visibility', 'hidden', 'important');
-                            container.style.setProperty('opacity', '0', 'important');
-                        }
-                    }
-
-                    // 2. 銷毀右下角懸浮的 viewerBadge / GitHub 頭像與皇冠徽章
-                    var badges = parentDoc.querySelectorAll('[class*="viewerBadge"], [data-testid="manage-app-button"], [data-testid="stStatusWidget"], div[class*="StatusWidget"]');
-                    for (var j = 0; j < badges.length; j++) {
-                        badges[j].style.setProperty('display', 'none', 'important');
-                        badges[j].style.setProperty('visibility', 'hidden', 'important');
-                        badges[j].style.setProperty('opacity', '0', 'important');
-                    }
-                } catch(e) {}
-            }, 50);
-
-        } catch(err) {
-            console.error("Clean error:", err);
-        }
-    })();
-    </script>
-    """,
-    height=0,
-)
-
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
@@ -506,16 +439,16 @@ components.html(
     f"""
     <script>
     (function() {{
-        try {{{{
+        try {{
             var parentDoc = window.parent.document;
             if (!parentDoc) return;
 
-            if (window.parent._stThumbSyncTimer) {{{{
+            if (window.parent._stThumbSyncTimer) {{
                 window.parent.clearInterval(window.parent._stThumbSyncTimer);
-            }}}}
+            }}
 
-            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{{{
-                try {{{{
+            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{
+                try {{
                     var thumbEl = parentDoc.querySelector('[data-testid="stThumbValue"], div[class*="ThumbValue"], div[class*="ValueLabel"]');
                     if (!thumbEl) return;
 
@@ -526,45 +459,45 @@ components.html(
                     if (isNaN(cur)) return;
 
                     var lblFrame = parentDoc.getElementById('lbl-cur-frame') || parentDoc.querySelector('.play-progress-label b');
-                    if (lblFrame && lblFrame.textContent !== String(cur)) {{{{
+                    if (lblFrame && lblFrame.textContent !== String(cur)) {{
                         lblFrame.textContent = cur;
-                    }}}}
+                    }}
 
                     var lblPct = parentDoc.getElementById('lbl-cur-pct');
-                    if (lblPct) {{{{
+                    if (lblPct) {{
                         var maxVal = {total_frames - 1};
                         var pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
                         var pctStr = pct + '%';
-                        if (lblPct.textContent !== pctStr) {{{{
+                        if (lblPct.textContent !== pctStr) {{
                             lblPct.textContent = pctStr;
-                        }}}}
-                    }}}}
-                }}}} catch (e) {{{{}}}}
-            }}}}, 20);
+                        }}
+                    }}
+                }} catch (e) {{}}
+            }}, 20);
 
-            if (window.parent._stTouchHandler) {{{{
+            if (window.parent._stTouchHandler) {{
                 parentDoc.removeEventListener('pointerdown', window.parent._stTouchHandler, true);
                 parentDoc.removeEventListener('touchstart', window.parent._stTouchHandler, true);
                 parentDoc.removeEventListener('mousedown', window.parent._stTouchHandler, true);
-            }}}}
+            }}
 
-            window.parent._stTouchHandler = function(e) {{{{
+            window.parent._stTouchHandler = function(e) {{
                 var s = e.target.closest('[data-testid="stSlider"]');
                 if (!s) return;
                 var stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
                               parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{{{
+                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{
                     stopBtn.click();
-                }}}}
-            }}}};
+                }}
+            }};
 
             parentDoc.addEventListener('pointerdown', window.parent._stTouchHandler, true);
             parentDoc.addEventListener('touchstart', window.parent._stTouchHandler, true);
             parentDoc.addEventListener('mousedown', window.parent._stTouchHandler, true);
 
-        }}}} catch (err) {{{{
+        }} catch (err) {{
             console.error("Sync error:", err);
-        }}}}
+        }}
     }})();
     </script>
     """,
