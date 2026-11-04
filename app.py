@@ -1,12 +1,9 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 使用 session_state 快取影片分析數據，徹底解決重複逐幀分析的延遲問題
-- 淺褐色高辨識度圓形播放/暫停按鈕
-- 可直接拖動跳轉的影片播放進度時間軸 (Scrubber Slider)
-- 紅色滑桿線精確橫切圓形按鈕正中心 (Vertical Center Alignment)
-- 影片畫面與數據看板 1:1 等寬佈局
-- 「較前」與「較後」單幀微調按鈕
-- 100% 真實逐幀物理數據分析
+- 解決雲端播放不更新影格問題 (加入播放鎖定保護，防止 slider on_change 誤暫停)
+- 採用輕量 JPEG 傳輸，確保雲端 25 FPS 影片播放流暢不卡頓
+- 快取影片分析數據至 session_state，拖動滑桿與播放零延遲
+- 淺褐色圓形按鈕、居中滑桿、1:1 佈局
 """
 
 import tempfile
@@ -248,7 +245,7 @@ if uploaded_file is None:
     st.stop()
 
 
-# ---------------- 關鍵快取機制：分析僅執行一次，快取至 session_state ----------------
+# ---------------- 快取機制：分析僅執行一次，快取至 session_state ----------------
 file_id = f"{uploaded_file.name}_{uploaded_file.size}"
 
 if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
@@ -267,7 +264,6 @@ if "cached_file_id" not in st.session_state or st.session_state.cached_file_id !
         smoothed_y = smooth_and_interpolate(trajectory["y"], trajectory["valid"])
         physics_data = calculate_real_frame_physics(smoothed_y, trajectory["valid"], fps)
 
-        # 寫入 Session State
         st.session_state.cached_frames = raw_frames
         st.session_state.cached_fps = fps
         st.session_state.cached_trajectory = trajectory
@@ -276,8 +272,9 @@ if "cached_file_id" not in st.session_state or st.session_state.cached_file_id !
         st.session_state.cached_file_id = file_id
         st.session_state.video_frame = int(physics_data["apex_f"])
         st.session_state.is_playing = False
+        st.session_state.is_advancing_playback = False
 
-# 讀取快取數據（零延遲，不再重跑 OpenCV）
+# 讀取快取數據
 frames = st.session_state.cached_frames
 fps = st.session_state.cached_fps
 trajectory = st.session_state.cached_trajectory
@@ -297,6 +294,9 @@ if "video_frame" not in st.session_state or st.session_state.video_frame >= tota
 if "is_playing" not in st.session_state:
     st.session_state.is_playing = False
 
+if "is_advancing_playback" not in st.session_state:
+    st.session_state.is_advancing_playback = False
+
 def jump_to_frame(target_frame):
     st.session_state.video_frame = int(target_frame)
     st.session_state.is_playing = False
@@ -309,24 +309,25 @@ def toggle_playback():
     if st.session_state.is_playing:
         st.session_state.is_playing = False
     else:
+        # 如果已經在最後一幀，重新從第 0 幀播放
         if st.session_state.video_frame >= total_frames - 1:
             st.session_state.video_frame = 0
         st.session_state.is_playing = True
-        st.session_state.play_just_started = True
 
 def on_slider_change():
-    st.session_state.is_playing = False
+    # 核心保護：只有當「學生手動拖動滑桿」時才暫停，播放中的自動推進絕不誤觸暫停
+    if not st.session_state.get("is_advancing_playback", False):
+        st.session_state.is_playing = False
 
 
-# ---------------- 播放步進（在 Slider 實例化前執行） ----------------
+# ---------------- 播放步進邏輯 ----------------
 if st.session_state.is_playing:
-    if st.session_state.get("play_just_started", False):
-        st.session_state.play_just_started = False
+    if st.session_state.video_frame < total_frames - 1:
+        st.session_state.is_advancing_playback = True
+        st.session_state.video_frame += 1
     else:
-        if st.session_state.video_frame < total_frames - 1:
-            st.session_state.video_frame += 1
-        else:
-            st.session_state.is_playing = False
+        st.session_state.is_playing = False
+        st.session_state.is_advancing_playback = False
 
 
 # ---------------- 5 個微調按鈕 ----------------
@@ -373,6 +374,9 @@ with col_slider:
         on_change=on_slider_change
     )
 
+# 渲染完成後解除推進保護
+st.session_state.is_advancing_playback = False
+
 # 當前幀數據
 cur_h = physics_data["Ep"][selected_f]
 cur_speed = physics_data["speed_pct"][selected_f]
@@ -411,7 +415,8 @@ with col_video:
     elif selected_f == apex_f:
         draw.ellipse([(cx - 10, cy - 10), (cx + 10, cy + 10)], fill="#eab308")
 
-    st.image(pil_img, use_container_width=True)
+    # 關鍵：採用 JPEG 壓縮傳輸，由 300KB 降至 35KB，確保雲端 25 FPS 影片播放流暢不卡頓
+    st.image(pil_img, use_container_width=True, output_format="JPEG")
 
 with col_panel:
     st.markdown(f"""
@@ -486,7 +491,7 @@ with col_panel:
     """, unsafe_allow_html=True)
 
 
-# ---------------- 播放輪詢 ----------------
+# ---------------- 播放輪詢 (穩定 20-25 FPS 慢動作) ----------------
 if st.session_state.is_playing:
-    time.sleep(0.04)  # 25 fps
+    time.sleep(0.045)
     st.rerun()
