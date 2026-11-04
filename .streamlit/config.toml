@@ -4,5 +4,5 @@ gatherUsageStats = false
 [server]
 headless = true
 enableXsrfProtection = false
+enableWebsocketCompression = false
 maxUploadSize = 200
-enableWebsocketCompression = true
