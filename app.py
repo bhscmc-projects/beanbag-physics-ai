@@ -5,7 +5,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
 - 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
 - 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
-- 徹底隱藏頂部右上角 (GitHub/Fork/選單) 與右下角 (Streamlit 徽章/Manage App 皇冠)，打造純淨學生教學介面
+- 徹底隱藏頂部右上角 (GitHub/Fork/選單) 與右下角 (< Manage app / Streamlit 徽章)，打造純淨學生教學介面
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -63,7 +63,7 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 隱藏學生無需看見的開發者與 Streamlit 介面 ---------------- */
+/* ---------------- 徹底隱藏學生無需看見的開發者按鈕與 Streamlit 標誌 ---------------- */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -81,13 +81,20 @@ footer,
     display: none !important;
     visibility: hidden !important;
 }
-[class*="viewerBadge"],
+
+/* 隱藏右下角 Manage App 與相關徽章 */
 [data-testid="manage-app-button"],
 #manage-app-button,
+.manage-app-button,
+[class*="manageApp"],
+[class*="ManageApp"],
+[class*="viewerBadge"],
 div[class*="StatusWidget"],
 [data-testid="stStatusWidget"] {
     display: none !important;
     visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -441,7 +448,7 @@ with col_slider:
         label_visibility="collapsed"
     )
 
-# ---------------- 頂層主視窗即時同步引擎 (20ms 心跳輪詢，100% 絕對同步) ----------------
+# ---------------- 頂層主視窗即時同步引擎 (20ms 心跳輪詢 + 自動銷毀 Manage app 按鈕) ----------------
 components.html(
     f"""
     <script>
@@ -455,9 +462,23 @@ components.html(
                 window.parent.clearInterval(window.parent._stThumbSyncTimer);
             }}
 
-            // 2. 50 FPS 頂層主視窗輪詢：紅字變動瞬間秒級鏡像至白字
+            // 2. 50 FPS 頂層主視窗輪詢：實時同步數值 + 強制隱藏 Manage app
             window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{
                 try {{
+                    // A. 強制將右下角 Manage app 按鈕隱藏 (即使以開發者身分登入)
+                    var allElements = parentDoc.querySelectorAll('button, div, a, span');
+                    for (var i = 0; i < allElements.length; i++) {{
+                        var el = allElements[i];
+                        if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {{
+                            var container = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
+                            container.style.setProperty('display', 'none', 'important');
+                            container.style.setProperty('visibility', 'hidden', 'important');
+                            container.style.setProperty('opacity', '0', 'important');
+                            container.style.setProperty('pointer-events', 'none', 'important');
+                        }}
+                    }}
+
+                    // B. 紅字與白字 100% 毫秒級實時同步
                     var thumbEl = parentDoc.querySelector('[data-testid="stThumbValue"], div[class*="ThumbValue"], div[class*="ValueLabel"]');
                     if (!thumbEl) return;
 
