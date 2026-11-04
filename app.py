@@ -3,7 +3,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 監聽 [data-testid="stThumbValue"]，透過 requestAnimationFrame 實現拖曳時上方白字進度 100% 實時同步聯動
+- 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
 - 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
@@ -275,116 +275,6 @@ iframe[data-testid="stCustomComponentV1"] {
 </style>
 """)
 
-# ---------------- 前端事件捕獲：拖動紅條時白字進度 100% 毫秒級實時同步 ----------------
-components.html(
-    """
-    <script>
-    (function() {
-        try {
-            const parentDoc = window.parent.document;
-            if (!parentDoc) return;
-
-            if (window.parent._stSliderLiveSyncAttached) return;
-            window.parent._stSliderLiveSyncAttached = true;
-
-            let isDragging = false;
-            let animFrameId = null;
-
-            // 實時將紅點數值同步至上方白字
-            function syncNow() {
-                const thumbValEl = parentDoc.querySelector('[data-testid="stThumbValue"]');
-                const lblFrame = parentDoc.getElementById('lbl-cur-frame') || parentDoc.querySelector('.play-progress-label b');
-                const lblPct = parentDoc.getElementById('lbl-cur-pct');
-                const lblTotal = parentDoc.getElementById('lbl-total-frames');
-
-                if (thumbValEl && lblFrame) {
-                    const rawText = thumbValEl.textContent || thumbValEl.innerText || '';
-                    const digits = rawText.replace(/[^0-9]/g, '');
-                    if (digits.length > 0) {
-                        const cur = parseInt(digits, 10);
-                        if (!isNaN(cur)) {
-                            if (lblFrame.textContent !== String(cur)) {
-                                lblFrame.textContent = cur;
-                            }
-                            if (lblPct) {
-                                const maxVal = lblTotal ? (parseInt(lblTotal.textContent.trim(), 10) || 151) : 151;
-                                const pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
-                                const pctStr = pct + '%';
-                                if (lblPct.textContent !== pctStr) {
-                                    lblPct.textContent = pctStr;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (isDragging) {
-                    animFrameId = requestAnimationFrame(syncNow);
-                }
-            }
-
-            // 1. 碰觸滑桿時：暫停播放以防搶幀，同時啟動 60 FPS 幀同步
-            const onSliderDown = function(e) {
-                const slider = e.target.closest('[data-testid="stSlider"]');
-                if (!slider) return;
-
-                const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
-                                parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
-                    stopBtn.click();
-                }
-
-                isDragging = true;
-                cancelAnimationFrame(animFrameId);
-                animFrameId = requestAnimationFrame(syncNow);
-            };
-
-            // 2. 移動時：觸發同步
-            const onPointerMove = function() {
-                if (isDragging) {
-                    syncNow();
-                }
-            };
-
-            // 3. 放開時：停止動畫並做最終校準
-            const onSliderUp = function() {
-                if (isDragging) {
-                    isDragging = false;
-                    cancelAnimationFrame(animFrameId);
-                    syncNow();
-                }
-            };
-
-            parentDoc.addEventListener('pointerdown', onSliderDown, true);
-            parentDoc.addEventListener('touchstart', onSliderDown, true);
-            parentDoc.addEventListener('mousedown', onSliderDown, true);
-
-            parentDoc.addEventListener('pointermove', onPointerMove, true);
-            parentDoc.addEventListener('touchmove', onPointerMove, true);
-            parentDoc.addEventListener('mousemove', onPointerMove, true);
-
-            parentDoc.addEventListener('pointerup', onSliderUp, true);
-            parentDoc.addEventListener('touchend', onSliderUp, true);
-            parentDoc.addEventListener('mouseup', onSliderUp, true);
-            parentDoc.addEventListener('pointercancel', onSliderUp, true);
-
-            // 監聽 DOM 變更確保數值更新無遺漏
-            const observer = new MutationObserver(function() {
-                if (isDragging) {
-                    syncNow();
-                }
-            });
-            observer.observe(parentDoc.body, { childList: true, subtree: true, characterData: true });
-
-        } catch (err) {
-            console.error("Live slider sync error:", err);
-        }
-    })();
-    </script>
-    """,
-    height=0,
-)
-
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
@@ -522,6 +412,79 @@ with col_slider:
         on_change=on_slider_change,
         label_visibility="collapsed"
     )
+
+# ---------------- 頂層主視窗即時同步引擎 (20ms 心跳輪詢，100% 絕對同步) ----------------
+components.html(
+    f"""
+    <script>
+    (function() {{
+        try {{
+            var parentDoc = window.parent.document;
+            if (!parentDoc) return;
+
+            // 1. 清理舊定時器，徹底杜絕單頁應用快取導致的失效
+            if (window.parent._stThumbSyncTimer) {{
+                window.parent.clearInterval(window.parent._stThumbSyncTimer);
+            }}
+
+            // 2. 50 FPS 頂層主視窗輪詢：紅字變動瞬間秒級鏡像至白字
+            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{
+                try {{
+                    var thumbEl = parentDoc.querySelector('[data-testid="stThumbValue"], div[class*="ThumbValue"], div[class*="ValueLabel"]');
+                    if (!thumbEl) return;
+
+                    var raw = thumbEl.textContent || thumbEl.innerText || '';
+                    var digits = raw.replace(/[^0-9]/g, '');
+                    if (!digits) return;
+                    var cur = parseInt(digits, 10);
+                    if (isNaN(cur)) return;
+
+                    var lblFrame = parentDoc.getElementById('lbl-cur-frame') || parentDoc.querySelector('.play-progress-label b');
+                    if (lblFrame && lblFrame.textContent !== String(cur)) {{
+                        lblFrame.textContent = cur;
+                    }}
+
+                    var lblPct = parentDoc.getElementById('lbl-cur-pct');
+                    if (lblPct) {{
+                        var maxVal = {total_frames - 1};
+                        var pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
+                        var pctStr = pct + '%';
+                        if (lblPct.textContent !== pctStr) {{
+                            lblPct.textContent = pctStr;
+                        }}
+                    }}
+                }} catch (e) {{}}
+            }}, 20);
+
+            // 3. 點擊/碰觸紅條瞬間暫停播放，杜絕搶幀
+            if (window.parent._stTouchHandler) {{
+                parentDoc.removeEventListener('pointerdown', window.parent._stTouchHandler, true);
+                parentDoc.removeEventListener('touchstart', window.parent._stTouchHandler, true);
+                parentDoc.removeEventListener('mousedown', window.parent._stTouchHandler, true);
+            }}
+
+            window.parent._stTouchHandler = function(e) {{
+                var s = e.target.closest('[data-testid="stSlider"]');
+                if (!s) return;
+                var stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
+                              parentDoc.querySelector('button[kind="primary"]');
+                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{
+                    stopBtn.click();
+                }}
+            }};
+
+            parentDoc.addEventListener('pointerdown', window.parent._stTouchHandler, true);
+            parentDoc.addEventListener('touchstart', window.parent._stTouchHandler, true);
+            parentDoc.addEventListener('mousedown', window.parent._stTouchHandler, true);
+
+        }} catch (err) {{
+            console.error("Slider sync error:", err);
+        }}
+    }})();
+    </script>
+    """,
+    height=0,
+)
 
 # 當前幀數據
 cur_h = physics_data["Ep"][selected_f]
