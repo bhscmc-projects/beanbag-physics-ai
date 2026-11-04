@@ -30,13 +30,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 輔助函式：安全注入純 HTML/CSS，防止 Markdown 誤將縮排解析為代碼區塊
-def render_html(html_str):
-    clean = textwrap.dedent(html_str).strip()
-    if hasattr(st, "html"):
-        st.html(clean)
-    else:
-        st.markdown(clean, unsafe_allow_html=True)
+# 輔助函式：安全注入純 HTML/CSS
+def render_html(html_str: str):
+    """
+    1. 逐行去除前後空白 (line.strip())，徹底消除 4 格縮排，100% 杜絕 Markdown 誤判為程式碼區塊 (<pre><code>)。
+    2. 過濾純空行，防止 CommonMark 在空行處提早終止 HTML 區塊解析。
+    3. 絕不調用 st.html()，避免 Streamlit Cloud 動態模組載入失敗 (Failed to fetch dynamically imported module)。
+    """
+    clean_lines = [line.strip() for line in html_str.splitlines() if line.strip()]
+    st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 # ---------------- 全局 CSS 樣式 ----------------
 render_html("""
