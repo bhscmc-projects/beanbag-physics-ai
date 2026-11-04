@@ -5,7 +5,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
 - 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
 - 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
-- 徹底隱藏頂部右上角 (GitHub/Fork/選單) 與右下角 (< Manage app / Streamlit 徽章)，打造純淨學生教學介面
+- 腳本頂部強制拔除右下角 (< Manage app、GitHub 圓形頭像、紅冠 Streamlit 徽章)，未上傳影片狀態下同樣 100% 隱形
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -63,7 +63,7 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 徹底隱藏學生無需看見的開發者按鈕與 Streamlit 標誌 ---------------- */
+/* ---------------- 徹底隱藏頂部與右下角的所有 Streamlit/Git 開發者介面 ---------------- */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -82,19 +82,24 @@ footer,
     visibility: hidden !important;
 }
 
-/* 隱藏右下角 Manage App 與相關徽章 */
+/* 徹底隱藏右下角 Manage App 按鈕、GitHub 圓形頭像徽章與紅色皇冠 Streamlit 徽章 */
 [data-testid="manage-app-button"],
 #manage-app-button,
 .manage-app-button,
 [class*="manageApp"],
 [class*="ManageApp"],
 [class*="viewerBadge"],
+div[class*="viewerBadge"],
+a[class*="viewerBadge"],
 div[class*="StatusWidget"],
-[data-testid="stStatusWidget"] {
+[data-testid="stStatusWidget"],
+.stStatusWidget {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    height: 0px !important;
+    width: 0px !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -310,6 +315,54 @@ iframe[data-testid="stCustomComponentV1"] {
 </style>
 """)
 
+# ---------------- 置於頂部的全局清理腳本（未上傳影片狀態下立即生效，徹底清除右下角按鈕與徽章） ----------------
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            var parentDoc = window.parent.document;
+            if (!parentDoc) return;
+
+            // 清理舊定時器
+            if (window.parent._stGlobalBadgeCleanTimer) {
+                window.parent.clearInterval(window.parent._stGlobalBadgeCleanTimer);
+            }
+
+            // 實時銷毀右下角 Manage App 按鈕、GitHub 頭像徽章與 Streamlit 紅冠
+            window.parent._stGlobalBadgeCleanTimer = window.parent.setInterval(function() {
+                try {
+                    // 1. 銷毀包含 Manage app 的任何按鈕或容器
+                    var allElements = parentDoc.querySelectorAll('button, div, a, span');
+                    for (var i = 0; i < allElements.length; i++) {
+                        var el = allElements[i];
+                        if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {
+                            var container = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
+                            container.style.setProperty('display', 'none', 'important');
+                            container.style.setProperty('visibility', 'hidden', 'important');
+                            container.style.setProperty('opacity', '0', 'important');
+                        }
+                    }
+
+                    // 2. 銷毀右下角懸浮的 viewerBadge / GitHub 頭像與皇冠徽章
+                    var badges = parentDoc.querySelectorAll('[class*="viewerBadge"], [data-testid="manage-app-button"], [data-testid="stStatusWidget"], div[class*="StatusWidget"]');
+                    for (var j = 0; j < badges.length; j++) {
+                        badges[j].style.setProperty('display', 'none', 'important');
+                        badges[j].style.setProperty('visibility', 'hidden', 'important');
+                        badges[j].style.setProperty('opacity', '0', 'important');
+                    }
+                } catch(e) {}
+            }, 50);
+
+        } catch(err) {
+            console.error("Clean error:", err);
+        }
+    })();
+    </script>
+    """,
+    height=0,
+)
+
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
@@ -448,37 +501,21 @@ with col_slider:
         label_visibility="collapsed"
     )
 
-# ---------------- 頂層主視窗即時同步引擎 (20ms 心跳輪詢 + 自動銷毀 Manage app 按鈕) ----------------
+# ---------------- 實時同步引擎 (拖動滑桿 50 FPS 同步白字 + 碰觸即暫停) ----------------
 components.html(
     f"""
     <script>
     (function() {{
-        try {{
+        try {{{{
             var parentDoc = window.parent.document;
             if (!parentDoc) return;
 
-            // 1. 清理舊定時器
-            if (window.parent._stThumbSyncTimer) {{
+            if (window.parent._stThumbSyncTimer) {{{{
                 window.parent.clearInterval(window.parent._stThumbSyncTimer);
-            }}
+            }}}}
 
-            // 2. 50 FPS 頂層主視窗輪詢：實時同步數值 + 強制隱藏 Manage app
-            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{
-                try {{
-                    // A. 強制將右下角 Manage app 按鈕隱藏 (即使以開發者身分登入)
-                    var allElements = parentDoc.querySelectorAll('button, div, a, span');
-                    for (var i = 0; i < allElements.length; i++) {{
-                        var el = allElements[i];
-                        if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {{
-                            var container = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
-                            container.style.setProperty('display', 'none', 'important');
-                            container.style.setProperty('visibility', 'hidden', 'important');
-                            container.style.setProperty('opacity', '0', 'important');
-                            container.style.setProperty('pointer-events', 'none', 'important');
-                        }}
-                    }}
-
-                    // B. 紅字與白字 100% 毫秒級實時同步
+            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{{{
+                try {{{{
                     var thumbEl = parentDoc.querySelector('[data-testid="stThumbValue"], div[class*="ThumbValue"], div[class*="ValueLabel"]');
                     if (!thumbEl) return;
 
@@ -489,46 +526,45 @@ components.html(
                     if (isNaN(cur)) return;
 
                     var lblFrame = parentDoc.getElementById('lbl-cur-frame') || parentDoc.querySelector('.play-progress-label b');
-                    if (lblFrame && lblFrame.textContent !== String(cur)) {{
+                    if (lblFrame && lblFrame.textContent !== String(cur)) {{{{
                         lblFrame.textContent = cur;
-                    }}
+                    }}}}
 
                     var lblPct = parentDoc.getElementById('lbl-cur-pct');
-                    if (lblPct) {{
+                    if (lblPct) {{{{
                         var maxVal = {total_frames - 1};
                         var pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
                         var pctStr = pct + '%';
-                        if (lblPct.textContent !== pctStr) {{
+                        if (lblPct.textContent !== pctStr) {{{{
                             lblPct.textContent = pctStr;
-                        }}
-                    }}
-                }} catch (e) {{}}
-            }}, 20);
+                        }}}}
+                    }}}}
+                }}}} catch (e) {{{{}}}}
+            }}}}, 20);
 
-            // 3. 點擊/碰觸紅條瞬間暫停播放，杜絕搶幀
-            if (window.parent._stTouchHandler) {{
+            if (window.parent._stTouchHandler) {{{{
                 parentDoc.removeEventListener('pointerdown', window.parent._stTouchHandler, true);
                 parentDoc.removeEventListener('touchstart', window.parent._stTouchHandler, true);
                 parentDoc.removeEventListener('mousedown', window.parent._stTouchHandler, true);
-            }}
+            }}}}
 
-            window.parent._stTouchHandler = function(e) {{
+            window.parent._stTouchHandler = function(e) {{{{
                 var s = e.target.closest('[data-testid="stSlider"]');
                 if (!s) return;
                 var stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
                               parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{
+                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{{{
                     stopBtn.click();
-                }}
-            }};
+                }}}}
+            }}}};
 
             parentDoc.addEventListener('pointerdown', window.parent._stTouchHandler, true);
             parentDoc.addEventListener('touchstart', window.parent._stTouchHandler, true);
             parentDoc.addEventListener('mousedown', window.parent._stTouchHandler, true);
 
-        }} catch (err) {{
-            console.error("Slider sync error:", err);
-        }}
+        }}}} catch (err) {{{{
+            console.error("Sync error:", err);
+        }}}}
     }})();
     </script>
     """,
