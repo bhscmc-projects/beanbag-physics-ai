@@ -1,11 +1,9 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 全面優化 iPad / 平板兼容性，相容 iOS/iPadOS WebKit
-- 只精確隱藏右上角 Fork 與 GitHub 標誌，保留左上角側邊欄展開鈕，防止平板側欄鎖死
-- 主畫面與側邊欄雙重上傳入口，平板學生操作 100% 友善
-- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
+- 支援 iPad 原生 .mov / .mp4 格式解碼
+- 智能記憶體管理，徹底根除 OOM 伺服器崩潰
+- 遵循 Streamlit 規範，在 slider 呼叫前合法更新步進
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 支援 iPad 原生 .mov 影片解碼與及時記憶體回收
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -57,16 +55,14 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 1. 隱藏右上角 Fork、GitHub 貓咪、三點選單（保留左上側欄展開鈕） ---------------- */
+/* 隱藏頂部彩虹裝飾條與選單 */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
-    height: 0px !important;
 }
 #MainMenu {
     display: none !important;
     visibility: hidden !important;
-    height: 0px !important;
 }
 header [data-testid="stHeaderActionElements"],
 header [data-testid="stToolbar"],
@@ -81,28 +77,6 @@ header[data-testid="stHeader"] {
 footer {
     display: none !important;
     visibility: hidden !important;
-}
-
-/* ---------------- 2. 將右下角所有標籤設為透明隱形 ---------------- */
-[data-testid="manage-app-button"],
-#manage-app-button,
-.manage-app-button,
-[class*="viewerBadge"],
-div[class*="viewerBadge"],
-a[class*="viewerBadge"],
-div[class*="StatusWidget"],
-[data-testid="stStatusWidget"],
-.stStatusWidget,
-[class*="manageApp"],
-[class*="ManageApp"] {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    color: transparent !important;
-    background: transparent !important;
-    pointer-events: none !important;
-    height: 0px !important;
-    width: 0px !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -301,40 +275,26 @@ div[data-testid="stSlider"] [role="slider"] {
     white-space: nowrap;
 }
 </style>
-<div class="bottom-right-shield"></div>
 """)
 
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
-uploaded_file_sidebar = st.sidebar.file_uploader(
+uploaded_file = st.sidebar.file_uploader(
     "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
-    type=["mov", "mp4"],
-    key="uploader_sidebar"
+    type=["mov", "mp4"]
 )
 
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
-uploaded_file = uploaded_file_sidebar
-
-# 未上傳時提示（若 iPad 側欄收合，直接在主畫面顯示上傳按鈕）
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
         if k in st.session_state:
             del st.session_state[k]
-    
     st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
-    uploaded_file_main = st.file_uploader(
-        "📱 若 iPad 側邊欄已收合，可直接點擊此處上傳影片 (.MOV / .MP4)：",
-        type=["mov", "mp4"],
-        key="uploader_main"
-    )
-    if uploaded_file_main is not None:
-        uploaded_file = uploaded_file_main
-    else:
-        st.stop()
+    st.stop()
 
 file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
 video_bytes = uploaded_file.getvalue()
