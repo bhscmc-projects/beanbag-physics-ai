@@ -1,9 +1,9 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 使用純淨 st.markdown 注入 HTML/CSS，徹底解決動態模組載入錯誤 (Html.js 報錯)
-- 移除所有不穩定 iframe 元件，徹底消除加載卡死問題
+- 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
+- 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 播放步進邏輯置於腳本最底層，保證用戶手動拖曳時間軸享有最高響應優先級，即拖即鎖定
+- 綁定 on_slider_change，手動拖曳滑桿即刻暫停背景輪詢，秒級響應目標幀
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -344,8 +344,17 @@ def stop_playback():
     st.session_state.is_playing = False
 
 def on_slider_change():
-    # 用戶手動拖曳時間軸滑桿時，立即暫停播放，時間軸與數值瞬間鎖定
+    # 拖動滑桿回調（在腳本主體執行前觸發）：立即暫停背景播放，確保數值不被搶奪
     st.session_state.is_playing = False
+
+
+# ---------------- 播放推進步進 (合法位置：必須在 st.slider 呼叫前執行) ----------------
+if st.session_state.is_playing:
+    if st.session_state.video_frame < total_frames - 1:
+        st.session_state.video_frame += 1
+    else:
+        st.session_state.video_frame = total_frames - 1
+        st.session_state.is_playing = False
 
 
 # ---------------- 5 個微調按鈕 ----------------
@@ -513,12 +522,7 @@ with col_panel:
     """)
 
 
-# ---------------- 播放輪詢與推進 (置於最底層：確保用戶手動拖曳滑桿與點擊微調具有最高響應優先級) ----------------
+# ---------------- 播放輪詢與定時 (只負責等待與觸發重跑，絕不在 slider 之後修改 state) ----------------
 if st.session_state.is_playing:
-    if st.session_state.video_frame < total_frames - 1:
-        st.session_state.video_frame += 1
-    else:
-        st.session_state.video_frame = total_frames - 1
-        st.session_state.is_playing = False
     time.sleep(0.08)
     st.rerun()
