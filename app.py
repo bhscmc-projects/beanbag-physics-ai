@@ -1,12 +1,9 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 移除報錯的 st.query_params["embed"]，徹底解決 StreamlitAPIException
-- 加入右下角同色物理遮罩與全局 DOM 清理器，100% 隱蔽 < Manage app、GitHub 頭像與 Streamlit 紅冠按鈕
-- 隱藏頂部所有開發者控制列 (Share/Edit/Fork/GitHub/MainMenu)
+- 徹底移除不安全的外殼跳轉腳本，恢復 100% 穩定秒開
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 頂層 20ms (50 FPS) 主視窗心跳同步，拖動紅條時紅字與上方白字進度 100% 實時同步跳動
-- 碰觸時間軸瞬間停止背景播放，消除搶幀衝突
+- 乾淨純粹的教學介面，支援直接以 ?embed=true 網址分享給學生
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -18,7 +15,6 @@ import time
 import cv2
 import numpy as np
 import streamlit as st
-import streamlit.components.v1 as components
 from PIL import Image, ImageDraw
 
 from tracker import BeanbagTracker
@@ -40,7 +36,7 @@ def render_html(html_str: str):
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式與右下角遮罩 ----------------
+# ---------------- 全局 CSS 樣式 ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
@@ -59,56 +55,21 @@ h1 {
     margin-bottom: 0.8rem !important;
 }
 
-/* ---------------- 1. 隱藏頂部所有開發者工具 (Share, Edit, Fork, GitHub, MainMenu, 裝飾條) ---------------- */
-[data-testid="stDecoration"],
-#MainMenu,
-header,
-header[data-testid="stHeader"],
-[data-testid="stHeaderActionElements"],
-[data-testid="stToolbar"],
-.stForkButton,
-.stAppDeployButton {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0px !important;
-}
-
-/* ---------------- 2. 隱藏預設頁尾 ---------------- */
-footer,
-[data-testid="stFooter"] {
+/* 隱藏頂部彩虹裝飾條與預設選單 */
+[data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
 }
-
-/* ---------------- 3. 右下角物理同色遮罩 (終極隱形法：直接覆蓋紅冠、頭像與 Manage app) ---------------- */
-.bottom-right-cover-mask {
-    position: fixed !important;
-    bottom: 0px !important;
-    right: 0px !important;
-    width: 250px !important;
-    height: 65px !important;
-    background-color: #0e1117 !important;
-    z-index: 999999999 !important;
-    pointer-events: none !important;
-    border: none !important;
-}
-
-/* 嘗試隱藏所有已知的雲端按鈕選擇器 */
-[data-testid="manage-app-button"],
-#manage-app-button,
-.manage-app-button,
-[class*="viewerBadge"],
-div[class*="viewerBadge"],
-a[class*="viewerBadge"],
-div[class*="StatusWidget"],
-[data-testid="stStatusWidget"],
-.stStatusWidget {
+#MainMenu {
     display: none !important;
     visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    height: 0px !important;
-    width: 0px !important;
+}
+header[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+footer {
+    display: none !important;
+    visibility: hidden !important;
 }
 
 /* 頂部 5 個微調按鈕標準樣式 */
@@ -206,21 +167,6 @@ div[data-testid="stSlider"] [role="slider"] {
     width: 20px !important;
     height: 20px !important;
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
-}
-
-/* 非阻塞隱藏輔助 iframe，防止版面留白 */
-div[data-testid="stCustomComponentV1"] {
-    height: 0px !important;
-    min-height: 0px !important;
-    max-height: 0px !important;
-    margin: 0px !important;
-    padding: 0px !important;
-    overflow: hidden !important;
-    border: none !important;
-}
-iframe[data-testid="stCustomComponentV1"] {
-    height: 0px !important;
-    border: none !important;
 }
 
 /* 側邊數據看板：1:1 佈局 */
@@ -322,48 +268,7 @@ iframe[data-testid="stCustomComponentV1"] {
     white-space: nowrap;
 }
 </style>
-<div class="bottom-right-cover-mask"></div>
 """)
-
-# ---------------- 置於頂部的 DOM 掃蕩器（未上傳影片狀態下立刻執行） ----------------
-components.html(
-    """
-    <script>
-    (function() {
-        try {
-            function sweepBadges() {
-                var docs = [document];
-                try { if (window.parent && window.parent.document) docs.push(window.parent.document); } catch(e) {}
-                try { if (window.top && window.top.document) docs.push(window.top.document); } catch(e) {}
-
-                docs.forEach(function(d) {
-                    try {
-                        var buttons = d.querySelectorAll('button, div, a, span');
-                        for (var i = 0; i < buttons.length; i++) {
-                            var el = buttons[i];
-                            if (el.textContent && el.textContent.trim().indexOf('Manage app') !== -1 && el.children.length <= 2) {
-                                var box = el.closest('div[style*="fixed"], div[style*="absolute"], button') || el;
-                                box.style.setProperty('display', 'none', 'important');
-                                box.style.setProperty('visibility', 'hidden', 'important');
-                            }
-                        }
-                        var badges = d.querySelectorAll('[class*="viewerBadge"], [data-testid="manage-app-button"], [data-testid="stStatusWidget"], div[class*="StatusWidget"]');
-                        for (var j = 0; j < badges.length; j++) {
-                            badges[j].style.setProperty('display', 'none', 'important');
-                            badges[j].style.setProperty('visibility', 'hidden', 'important');
-                        }
-                    } catch(err) {}
-                });
-            }
-
-            sweepBadges();
-            setInterval(sweepBadges, 100);
-        } catch(e) {}
-    })();
-    </script>
-    """,
-    height=0,
-)
 
 
 # ---------------- 側邊欄：影片上傳 ----------------
@@ -482,7 +387,7 @@ progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
 render_html(
-    f'<div class="play-progress-label">🎥 播放進度：第 <b id="lbl-cur-frame">{st.session_state.video_frame}</b> / <span id="lbl-total-frames">{total_frames - 1}</span> 幀 (<span id="lbl-cur-pct">{int(progress_ratio * 100)}%</span>) '
+    f'<div class="play-progress-label">🎥 播放進度：第 <b>{st.session_state.video_frame}</b> / {total_frames - 1} 幀 ({int(progress_ratio * 100)}%) '
     f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>'
 )
 
@@ -502,76 +407,6 @@ with col_slider:
         on_change=on_slider_change,
         label_visibility="collapsed"
     )
-
-# ---------------- 實時同步引擎 (拖動滑桿 50 FPS 同步白字 + 碰觸即暫停) ----------------
-components.html(
-    f"""
-    <script>
-    (function() {{
-        try {{
-            var parentDoc = window.parent.document;
-            if (!parentDoc) return;
-
-            if (window.parent._stThumbSyncTimer) {{
-                window.parent.clearInterval(window.parent._stThumbSyncTimer);
-            }}
-
-            window.parent._stThumbSyncTimer = window.parent.setInterval(function() {{
-                try {{
-                    var thumbEl = parentDoc.querySelector('[data-testid="stThumbValue"], div[class*="ThumbValue"], div[class*="ValueLabel"]');
-                    if (!thumbEl) return;
-
-                    var raw = thumbEl.textContent || thumbEl.innerText || '';
-                    var digits = raw.replace(/[^0-9]/g, '');
-                    if (!digits) return;
-                    var cur = parseInt(digits, 10);
-                    if (isNaN(cur)) return;
-
-                    var lblFrame = parentDoc.getElementById('lbl-cur-frame') || parentDoc.querySelector('.play-progress-label b');
-                    if (lblFrame && lblFrame.textContent !== String(cur)) {{
-                        lblFrame.textContent = cur;
-                    }}
-
-                    var lblPct = parentDoc.getElementById('lbl-cur-pct');
-                    if (lblPct) {{
-                        var maxVal = {total_frames - 1};
-                        var pct = maxVal > 0 ? Math.min(100, Math.max(0, Math.round((cur / maxVal) * 100))) : 0;
-                        var pctStr = pct + '%';
-                        if (lblPct.textContent !== pctStr) {{
-                            lblPct.textContent = pctStr;
-                        }}
-                    }}
-                }} catch (e) {{}}
-            }}, 20);
-
-            if (window.parent._stTouchHandler) {{
-                parentDoc.removeEventListener('pointerdown', window.parent._stTouchHandler, true);
-                parentDoc.removeEventListener('touchstart', window.parent._stTouchHandler, true);
-                parentDoc.removeEventListener('mousedown', window.parent._stTouchHandler, true);
-            }}
-
-            window.parent._stTouchHandler = function(e) {{
-                var s = e.target.closest('[data-testid="stSlider"]');
-                if (!s) return;
-                var stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
-                              parentDoc.querySelector('button[kind="primary"]');
-                if (stopBtn && (stopBtn.innerText.indexOf('⏸') !== -1 || stopBtn.textContent.indexOf('⏸') !== -1)) {{
-                    stopBtn.click();
-                }}
-            }};
-
-            parentDoc.addEventListener('pointerdown', window.parent._stTouchHandler, true);
-            parentDoc.addEventListener('touchstart', window.parent._stTouchHandler, true);
-            parentDoc.addEventListener('mousedown', window.parent._stTouchHandler, true);
-
-        }} catch (err) {{
-            console.error("Sync error:", err);
-        }}
-    }})();
-    </script>
-    """,
-    height=0,
-)
 
 # 當前幀數據
 cur_h = physics_data["Ep"][selected_f]
