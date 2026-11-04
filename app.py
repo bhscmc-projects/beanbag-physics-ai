@@ -240,11 +240,6 @@ uploaded_file = st.sidebar.file_uploader(
     type=["mov", "mp4"]
 )
 
-# 一鍵徹底清空快取按鈕
-if st.sidebar.button("🗑️ 清空快取並重設 (Reset All)", use_container_width=True):
-    st.session_state.clear()
-    st.rerun()
-
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
@@ -323,6 +318,10 @@ def stop_playback():
     st.session_state.is_playing = False
     st.session_state.video_frame = max(0, st.session_state.video_frame - 1)
 
+def on_slider_change():
+    # 當用戶手動拖曳時間軸滑桿時，立即停止播放迴圈，杜絕背景 50ms 推進與手動拖曳發生競態衝突
+    st.session_state.is_playing = False
+
 
 # ---------------- 播放推進步進 (逐 1 幀前進) ----------------
 if st.session_state.is_playing:
@@ -369,6 +368,7 @@ with col_slider:
         min_value=0,
         max_value=total_frames - 1,
         key="video_frame",
+        on_change=on_slider_change,  # 👈 加上這一行！
         label_visibility="collapsed"
     )
 
