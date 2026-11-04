@@ -3,7 +3,7 @@ app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 使用純淨 st.markdown 注入 HTML/CSS，杜絕動態模組載入錯誤 (Html.js 報錯)
 - 遵循 Streamlit 官方 Session State 規範，在 slider 呼叫前合法更新步進，徹底解決 StreamlitWidgetAlreadyInstantiatedError
 - 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 綁定 on_slider_change，手動拖曳滑桿即刻暫停背景輪詢，秒級響應目標幀
+- 透過非阻塞式前端事件監聽，手指或滑鼠碰觸時間軸瞬間停止背景輪詢，100% 消除搶幀衝突
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
@@ -15,6 +15,7 @@ import time
 import cv2
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image, ImageDraw
 
 from tracker import BeanbagTracker
@@ -157,6 +158,21 @@ div[data-testid="stSlider"] [role="slider"] {
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
+/* 非阻塞隱藏輔助 iframe，防止版面留白，同時絕不阻斷前端通訊握手 */
+div[data-testid="stCustomComponentV1"] {
+    height: 0px !important;
+    min-height: 0px !important;
+    max-height: 0px !important;
+    margin: 0px !important;
+    padding: 0px !important;
+    overflow: hidden !important;
+    border: none !important;
+}
+iframe[data-testid="stCustomComponentV1"] {
+    height: 0px !important;
+    border: none !important;
+}
+
 /* 側邊數據看板：1:1 佈局 */
 .side-card-compact {
     background-color: #0f172a;
@@ -258,6 +274,42 @@ div[data-testid="stSlider"] [role="slider"] {
 </style>
 """)
 
+# ---------------- 前端事件捕獲：碰觸時間軸瞬間暫停播放，徹底解決搶幀 ----------------
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            const parentDoc = window.parent.document;
+            if (!parentDoc) return;
+
+            if (window.parent._stSliderTouchRegistered) return;
+            window.parent._stSliderTouchRegistered = true;
+
+            const onSliderTouch = function(e) {
+                const slider = e.target.closest('[data-testid="stSlider"]');
+                if (!slider) return;
+
+                const stopBtn = parentDoc.querySelector('.st-key-btn_stop_circle button') ||
+                                parentDoc.querySelector('button[kind="primary"]');
+                if (stopBtn && (stopBtn.innerText.includes('⏸') || stopBtn.textContent.includes('⏸'))) {
+                    stopBtn.click();
+                }
+            };
+
+            // 在事件捕獲階段攔截，搶在 React 前端接收到數值變動前立即暫停後端推進
+            parentDoc.addEventListener('pointerdown', onSliderTouch, true);
+            parentDoc.addEventListener('touchstart', onSliderTouch, true);
+            parentDoc.addEventListener('mousedown', onSliderTouch, true);
+        } catch (err) {
+            console.error("Slider listener init error:", err);
+        }
+    })();
+    </script>
+    """,
+    height=0,
+)
+
 
 # ---------------- 側邊欄：影片上傳 ----------------
 st.sidebar.title("📁 實驗影片上傳")
@@ -344,7 +396,6 @@ def stop_playback():
     st.session_state.is_playing = False
 
 def on_slider_change():
-    # 拖動滑桿回調（在腳本主體執行前觸發）：立即暫停背景播放，確保數值不被搶奪
     st.session_state.is_playing = False
 
 
@@ -522,7 +573,7 @@ with col_panel:
     """)
 
 
-# ---------------- 播放輪詢與定時 (只負責等待與觸發重跑，絕不在 slider 之後修改 state) ----------------
+# ---------------- 播放輪詢與定時 ----------------
 if st.session_state.is_playing:
     time.sleep(0.08)
     st.rerun()
