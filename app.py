@@ -1,12 +1,11 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 採用 Base64 內嵌圖像傳輸，確保紅條滑桿與影片影格 100% 同步無時差
-- 獨立明確的「播放」與「暫停」控制，徹底解決按鈕無法停止紅條的問題
-- 側邊欄提供影片來源選擇與「一鍵清空快取」功能，不再被舊快取干擾
+- 始終由用戶主動上傳影片 (移除內建示範影片選項)
+- 消除停止按鈕的 4 幀延遲 (改為逐 1 幀前進 + 雲端網絡延遲補償，即按即停)
+- 採用 Base64 內嵌影像，確保紅條與影片 100% 同步
 - 1:1 佈局、精準垂直居中、真實逐幀數據分析
 """
 
-import os
 import io
 import base64
 import tempfile
@@ -55,7 +54,7 @@ st.markdown("""
         border-radius: 10px !important;
     }
 
-    /* 專屬：淺褐色圓形播放/暫停按鈕 (播放與停止兩者共用樣式) */
+    /* 專屬：淺褐色圓形播放/暫停按鈕 */
     button[data-testid="baseButton-primary"],
     .st-key-btn_play_circle button,
     .st-key-btn_stop_circle button,
@@ -113,7 +112,7 @@ st.markdown("""
         margin-bottom: 2px;
     }
 
-    /* 紅色滑桿軌道垂直居中微調 */
+    /* 紅色滑桿軌道垂直居中 */
     div[data-testid="stSlider"] {
         padding-top: 19px !important;
         margin-top: 0 !important;
@@ -221,55 +220,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------- 側邊欄：影片設定與快取完全控制 ----------------
-st.sidebar.title("📁 實驗影片設定")
-
-video_source = st.sidebar.radio(
-    "選擇影片來源：",
-    ["上傳我的 iPad 影片", "使用內建示範影片 (input.mp4)"],
-    index=0
+# ---------------- 側邊欄：始終由用戶主動上傳影片 ----------------
+st.sidebar.title("📁 實驗影片上傳")
+uploaded_file = st.sidebar.file_uploader(
+    "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
+    type=["mov", "mp4"]
 )
 
-# 解決快取殘留問題：提供一鍵徹底清空按鈕
+# 一鍵徹底清空快取按鈕
 if st.sidebar.button("🗑️ 清空快取並重設 (Reset All)", use_container_width=True):
     st.session_state.clear()
     st.rerun()
-
-video_bytes = None
-file_id = None
-
-if video_source == "上傳我的 iPad 影片":
-    uploaded_file = st.sidebar.file_uploader(
-        "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
-        type=["mov", "mp4"]
-    )
-    if uploaded_file is not None:
-        file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
-        video_bytes = uploaded_file.getvalue()
-        st.sidebar.success(f"✅ 已載入影片：{uploaded_file.name}")
-    else:
-        # 當學生未上傳或點擊了 (x)，立刻刪除舊快取，不讓舊影片殘留！
-        for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
-            if k in st.session_state:
-                del st.session_state[k]
-else:
-    demo_file_path = "input.mp4"
-    if os.path.exists(demo_file_path):
-        file_id = "default_demo_input_mp4"
-        with open(demo_file_path, "rb") as f:
-            video_bytes = f.read()
-        st.sidebar.info("🎬 現正使用系統內建模擬示範影片 (input.mp4)")
 
 # ---------------- 主標題 ----------------
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 st.markdown('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>', unsafe_allow_html=True)
 
-if video_bytes is None:
+if uploaded_file is None:
+    # 當沒有上傳影片或用戶點擊了 (x)，立刻刪除舊快取，不讓舊影片殘留
+    for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
+        if k in st.session_state:
+            del st.session_state[k]
     st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
     st.stop()
 
+file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
+video_bytes = uploaded_file.getvalue()
 
-# ---------------- 分析影片 (僅在更換影片時執行一次) ----------------
+
+# ---------------- 分析影片 (僅在更換新影片時執行一次) ----------------
 if "cached_file_id" not in st.session_state or st.session_state.cached_file_id != file_id:
     with st.spinner("🤖 AI 正在逐幀提取物體真實像素座標，計算勢能與動能 (僅需分析一次)..."):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
@@ -323,21 +302,20 @@ def step_frame(step_amount):
     st.session_state.video_frame = max(0, min(total_frames - 1, st.session_state.video_frame + step_amount))
     st.session_state.is_playing = False
 
-# 核心修正：將「播放」與「暫停」分成確定性的獨立動作，點擊 100% 立即停止
 def start_playback():
     if st.session_state.video_frame >= total_frames - 1:
         st.session_state.video_frame = 0
     st.session_state.is_playing = True
 
+# 關鍵修正：點擊暫停時，補償網絡飛行延遲，精確定格在學生按下當下看見的影格
 def stop_playback():
     st.session_state.is_playing = False
+    st.session_state.video_frame = max(0, st.session_state.video_frame - 1)
 
 
-# ---------------- 播放推進步進 (每次跳步 2 幀，形成穩定的 25 FPS 慢動作) ----------------
+# ---------------- 播放推進步進 (逐 1 幀前進，杜絕多幀跳步延遲) ----------------
 if st.session_state.is_playing:
-    if st.session_state.video_frame < total_frames - 2:
-        st.session_state.video_frame += 2
-    elif st.session_state.video_frame < total_frames - 1:
+    if st.session_state.video_frame < total_frames - 1:
         st.session_state.video_frame += 1
     else:
         st.session_state.video_frame = total_frames - 1
@@ -422,8 +400,7 @@ with col_video:
     elif selected_f == apex_f:
         draw.ellipse([(cx - 10, cy - 10), (cx + 10, cy + 10)], fill="#eab308")
 
-    # 關鍵修正：將圖片直接轉為 Base64 內嵌於 HTML 中！
-    # 徹底告別非同步 HTTP 圖片請求，滑桿數值與圖片 100% 同一封包發送，絕對即時同步！
+    # 將圖像轉為 Base64 內嵌，消除非同步延遲
     buffered = io.BytesIO()
     pil_img.save(buffered, format="JPEG", quality=80)
     img_b64 = base64.b64encode(buffered.getvalue()).decode()
@@ -511,7 +488,7 @@ with col_panel:
     """, unsafe_allow_html=True)
 
 
-# ---------------- 播放輪詢 (80ms 穩定傳輸，讓瀏覽器充分處理「暫停」點擊事件) ----------------
+# ---------------- 播放輪詢 (50ms 節奏，平滑前進且反應即時) ----------------
 if st.session_state.is_playing:
-    time.sleep(0.08)
+    time.sleep(0.05)
     st.rerun()
