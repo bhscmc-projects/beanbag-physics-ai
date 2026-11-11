@@ -1,10 +1,11 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 專為學校 iPad 課堂環境設計
-- 永久鎖定左側單一上傳欄，徹底移除主畫面重複的上傳框
-- 暫停按鈕 100% 絕對幾何居中 (解決向右偏斜問題)
+- 影片分析完成後預設從第 0 幀（起點）開始顯示
+- 首頁指引區採用實線告示欄設計，徹底告別虛線拖放框外觀
+- 永久鎖定左側單一上傳欄，無重複介面
+- 暫停按鈕 100% 絕對幾何居中
 - 播放進度高對比度深色字體，適配 iPad 純白主題
-- 頂部微調按鈕保證文字完整呈現不被截斷
 """
 
 import os
@@ -148,12 +149,12 @@ button[data-testid="baseButton-primary"],
 .st-key-btn_play_circle button,
 .st-key-btn_stop_circle button,
 button[kind="primary"] {
-    position: relative !important; /* 確保子元素絕對定位基準正確 */
+    position: relative !important;
     background: linear-gradient(135deg, #d49a5b 0%, #8c531b 100%) !important;
     background-color: #b8824f !important;
     color: #ffffff !important;
     border: 2.5px solid #fde68a !important;
-    border-radius: 14px !important; /* 微圓角方形 (Squircle) */
+    border-radius: 14px !important;
     width: 48px !important;
     height: 48px !important;
     min-height: 48px !important;
@@ -182,7 +183,6 @@ button[kind="primary"]:hover {
     box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* 播放箭頭 */
 .st-key-btn_play_circle button p {
     color: #ffffff !important;
     font-size: 1.30rem !important;
@@ -193,10 +193,9 @@ button[kind="primary"]:hover {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    text-indent: 2px !important; /* 三角形視覺重心補償 */
+    text-indent: 2px !important;
 }
 
-/* 暫停按鈕：徹底隱藏所有原生內部節點，防止左側容器佔位導致圖示右偏 */
 .st-key-btn_stop_circle button * {
     display: none !important;
     visibility: hidden !important;
@@ -206,7 +205,6 @@ button[kind="primary"]:hover {
     padding: 0 !important;
 }
 
-/* 暫停圖示：以絕對定位 50% 居中，100% 絕對幾何正中對齊 */
 .st-key-btn_stop_circle button::after {
     content: "" !important;
     position: absolute !important;
@@ -221,20 +219,20 @@ button[kind="primary"]:hover {
     pointer-events: none !important;
 }
 
-/* ---------------- 播放時間軸進度文字 (高對比黑底紅字) ---------------- */
+/* ---------------- 播放時間軸進度文字 ---------------- */
 .play-progress-label {
     font-size: 1.12rem !important;
     font-weight: 700 !important;
-    color: #0f172a !important; /* 強制深黑藍色，在 iPad 白色背景下清晰分明 */
+    color: #0f172a !important;
     margin-top: 10px !important;
     margin-bottom: 4px !important;
 }
 .play-progress-label b {
-    color: #dc2626 !important; /* 當前幀數以高亮紅色強調 */
+    color: #dc2626 !important;
     font-size: 1.25rem !important;
 }
 .play-progress-hint {
-    color: #475569 !important; /* 深灰色提示字 */
+    color: #475569 !important;
     font-size: 0.95rem !important;
     font-weight: 500 !important;
 }
@@ -243,7 +241,6 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) {
     align-items: center !important;
 }
 
-/* 紅色滑桿向上微調並與左側按鈕保持 20px 舒適間隔 */
 div[data-testid="stSlider"] {
     padding-top: 0px !important;
     margin-top: -6px !important;
@@ -254,7 +251,6 @@ div[data-testid="stSlider"] {
     justify-content: center !important;
 }
 
-/* 紅條軌道加粗至 8px 圓角 */
 div[data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
     height: 8px !important;
     border-radius: 4px !important;
@@ -381,19 +377,28 @@ uploaded_file = st.sidebar.file_uploader(
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
-# ---------------- 未上傳時的主頁面引導卡片 (無重複上傳框，指向左側唯一區域) ----------------
+# ---------------- 未上傳時的主頁面 (實線現代資訊告示卡片，絕無虛線拖放感) ----------------
 if uploaded_file is None:
-    for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
+    for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id", "video_frame"]:
         if k in st.session_state:
             del st.session_state[k]
 
     st.markdown("""
-    <div style="background-color: #f8fafc; border: 2px dashed #0284c7; border-radius: 14px; padding: 36px 20px; text-align: center; margin: 25px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-        <div style="font-size: 2.4rem; margin-bottom: 12px;">👈 📹</div>
-        <h3 style="color: #0369a1; margin-top: 0; font-size: 1.35rem; font-weight: 700;">請於左側欄上傳實驗慢動作影片</h3>
-        <p style="color: #475569; font-size: 1.02rem; line-height: 1.6; max-width: 500px; margin: 0 auto;">
-            請點擊左側「<b>實驗影片上傳</b>」區域中的「<b>Upload</b>」按鈕，選取 iPad 拍攝的「向上拋豆袋」慢動作影片 (.MOV / .MP4) 以開始分析。
-        </p>
+    <div style="background-color: #ffffff; border: 1.5px solid #e2e8f0; border-left: 6px solid #0284c7; border-radius: 14px; padding: 26px 22px; margin: 20px 0; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05); display: flex; align-items: flex-start; gap: 18px;">
+        <div style="background-color: #e0f2fe; color: #0284c7; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; flex-shrink: 0;">
+            👈
+        </div>
+        <div style="flex: 1;">
+            <h3 style="color: #0f172a; margin: 0 0 6px 0; font-size: 1.25rem; font-weight: 700;">
+                系統就緒：請於左側欄上傳實驗慢動作影片
+            </h3>
+            <p style="color: #475569; font-size: 0.98rem; line-height: 1.6; margin: 0 0 10px 0;">
+                請點擊左側「<b>📁 實驗影片上傳</b>」面板中的 <b>Upload</b> 按鈕，選取 iPad 拍攝的「向上拋豆袋」慢動作影片（支援 .MOV 與 .MP4 格式）。
+            </p>
+            <div style="display: inline-block; background-color: #f1f5f9; color: #475569; font-size: 0.88rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                💡 支援 120 FPS / 240 FPS 慢動作攝影，AI 將全自動逐幀追蹤紅色彩袋並計算能量轉換
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -443,7 +448,8 @@ if "cached_file_id" not in st.session_state or st.session_state.cached_file_id !
         st.session_state.cached_smoothed_y = smoothed_y
         st.session_state.cached_physics_data = physics_data
         st.session_state.cached_file_id = file_id
-        st.session_state.video_frame = int(physics_data["apex_f"])
+        # 新上傳影片一律從第 0 幀開始（如同未拖動滑桿）
+        st.session_state.video_frame = 0
         st.session_state.is_playing = False
 
 # 讀取快取數據
@@ -461,7 +467,7 @@ end_f = physics_data["end_f"]
 
 # ---------------- 播放狀態與控制函式 ----------------
 if "video_frame" not in st.session_state or st.session_state.video_frame >= total_frames:
-    st.session_state.video_frame = int(apex_f)
+    st.session_state.video_frame = 0
 
 if "is_playing" not in st.session_state:
     st.session_state.is_playing = False
