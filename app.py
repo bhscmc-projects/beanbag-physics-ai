@@ -1,11 +1,10 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 專為學校 iPad 課堂環境設計
-- 徹底鎖定左側上傳欄常駐展開，消除誤按 << 導致鎖死的現象
-- 主畫面提供雙重上傳保障，永不卡死
-- 播放進度文字改為高對比度深色，徹底適配老款 iPad 白色主題
-- 像素級還原 MacBook 截圖金色暫停按鈕
-- 保證按鈕文字不截斷、紅條滑桿安全間距
+- 永久鎖定左側單一上傳欄，徹底移除主畫面重複的上傳框
+- 暫停按鈕 100% 絕對幾何居中 (解決向右偏斜問題)
+- 播放進度高對比度深色字體，適配 iPad 純白主題
+- 頂部微調按鈕保證文字完整呈現不被截斷
 """
 
 import os
@@ -48,7 +47,7 @@ html, body, [class*="css"] {
 h1 {
     font-size: 2.0rem !important;
     font-weight: 800 !important;
-    color: #0f172a !important; /* 深黑藍色標題，白底黑字清晰 */
+    color: #0f172a !important; /* 深黑藍色標題 */
     margin-bottom: 0.2rem !important;
 }
 .sub-caption {
@@ -81,8 +80,7 @@ footer {
     visibility: hidden !important;
 }
 
-/* ---------------- 側邊欄防鎖死終極方案 ---------------- */
-/* 1. 徹底隱藏 << 收起按鈕，防止學生在 iPad 上誤按 */
+/* ---------------- 側邊欄防鎖死：永久固定展開 ---------------- */
 [data-testid="stSidebarCollapseButton"],
 button[data-testid="stSidebarCollapseButton"],
 div[data-testid="stSidebarHeader"] button,
@@ -92,7 +90,6 @@ div[data-testid="collapsedControl"] {
     visibility: hidden !important;
 }
 
-/* 2. 強制側邊欄常駐展開，即便 iPad 快存了折疊狀態也直接覆蓋展開 */
 section[data-testid="stSidebar"] {
     display: block !important;
     visibility: visible !important;
@@ -112,7 +109,7 @@ section[data-testid="stSidebar"] > div:first-child {
     width: 100% !important;
 }
 
-/* ---------------- 頂部 5 個微調按鈕 (防止文字截斷) ---------------- */
+/* ---------------- 頂部 5 個微調按鈕 ---------------- */
 div[data-testid="stButton"] button {
     min-height: 42px !important;
     height: auto !important;
@@ -129,7 +126,7 @@ div[data-testid="stButton"] button p {
     font-weight: 700 !important;
     line-height: 1.2 !important;
     text-align: center !important;
-    white-space: normal !important; /* 允許折行，徹底防止被截斷為 ... */
+    white-space: normal !important;
     word-break: break-word !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -146,16 +143,17 @@ div[data-testid="stButton"] button p {
     }
 }
 
-/* ---------------- 播放 / 暫停按鈕 (100% 像素級還原截圖) ---------------- */
+/* ---------------- 播放 / 暫停按鈕 (精確絕對居中) ---------------- */
 button[data-testid="baseButton-primary"],
 .st-key-btn_play_circle button,
 .st-key-btn_stop_circle button,
 button[kind="primary"] {
+    position: relative !important; /* 確保子元素絕對定位基準正確 */
     background: linear-gradient(135deg, #d49a5b 0%, #8c531b 100%) !important;
     background-color: #b8824f !important;
     color: #ffffff !important;
     border: 2.5px solid #fde68a !important;
-    border-radius: 14px !important; /* 截圖中的微圓角方形 (Squircle) */
+    border-radius: 14px !important; /* 微圓角方形 (Squircle) */
     width: 48px !important;
     height: 48px !important;
     min-height: 48px !important;
@@ -171,6 +169,7 @@ button[kind="primary"] {
     cursor: pointer !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     flex-shrink: 0 !important;
+    box-sizing: border-box !important;
 }
 
 button[data-testid="baseButton-primary"]:hover,
@@ -183,36 +182,50 @@ button[kind="primary"]:hover {
     box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
+/* 播放箭頭 */
 .st-key-btn_play_circle button p {
     color: #ffffff !important;
-    font-size: 1.35rem !important;
+    font-size: 1.30rem !important;
     font-weight: 800 !important;
     line-height: 1 !important;
     margin: 0 !important;
     padding: 0 !important;
-    padding-left: 3px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-indent: 2px !important; /* 三角形視覺重心補償 */
 }
 
-/* 暫停按鈕：純 CSS 繪製兩條純白垂直長條，根除 iPadOS = Emoji 錯誤 */
-.st-key-btn_stop_circle button p {
+/* 暫停按鈕：徹底隱藏所有原生內部節點，防止左側容器佔位導致圖示右偏 */
+.st-key-btn_stop_circle button * {
     display: none !important;
     visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
+
+/* 暫停圖示：以絕對定位 50% 居中，100% 絕對幾何正中對齊 */
 .st-key-btn_stop_circle button::after {
     content: "" !important;
-    display: block !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
     width: 14px !important;
     height: 18px !important;
     border-left: 5px solid #ffffff !important;
     border-right: 5px solid #ffffff !important;
     box-sizing: border-box !important;
+    pointer-events: none !important;
 }
 
-/* ---------------- 播放時間軸進度文字 (高對比黑底紅字，徹底解決老 iPad 發白問題) ---------------- */
+/* ---------------- 播放時間軸進度文字 (高對比黑底紅字) ---------------- */
 .play-progress-label {
     font-size: 1.12rem !important;
     font-weight: 700 !important;
-    color: #0f172a !important; /* 強制深黑藍色，在 iPad 白色背景下 100% 清楚 */
+    color: #0f172a !important; /* 強制深黑藍色，在 iPad 白色背景下清晰分明 */
     margin-top: 10px !important;
     margin-bottom: 4px !important;
 }
@@ -251,7 +264,6 @@ div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
     border-radius: 4px !important;
 }
 
-/* 滑動圓點 */
 div[data-testid="stSlider"] [role="slider"] {
     width: 20px !important;
     height: 20px !important;
@@ -358,7 +370,7 @@ div[data-testid="stSlider"] [role="slider"] {
 """)
 
 
-# ---------------- 側邊欄：影片上傳 ----------------
+# ---------------- 側邊欄：唯一的影片上傳介面 ----------------
 st.sidebar.title("📁 實驗影片上傳")
 uploaded_file = st.sidebar.file_uploader(
     "請上傳 iPad 拍攝的慢動作影片 (.MOV / .MP4)", 
@@ -369,26 +381,22 @@ uploaded_file = st.sidebar.file_uploader(
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
-# ---------------- 未上傳時的主頁面 (雙重防護：主畫面中央也提供上傳框) ----------------
+# ---------------- 未上傳時的主頁面引導卡片 (無重複上傳框，指向左側唯一區域) ----------------
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
         if k in st.session_state:
             del st.session_state[k]
 
     st.markdown("""
-    <div style="background-color: #f1f5f9; border: 2px dashed #0284c7; border-radius: 14px; padding: 22px; text-align: center; margin: 15px 0;">
-        <h3 style="color: #0369a1; margin-top: 0; font-size: 1.35rem;">📹 請選取實驗慢動作影片開始分析</h3>
-        <p style="color: #334155; font-size: 1.0rem; margin-bottom: 8px;">
-            您可以在左側欄上傳，或者直接在下方按鈕選取 iPad 拍攝的「向上拋豆袋」影片 (.MOV / .MP4)
+    <div style="background-color: #f8fafc; border: 2px dashed #0284c7; border-radius: 14px; padding: 36px 20px; text-align: center; margin: 25px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+        <div style="font-size: 2.4rem; margin-bottom: 12px;">👈 📹</div>
+        <h3 style="color: #0369a1; margin-top: 0; font-size: 1.35rem; font-weight: 700;">請於左側欄上傳實驗慢動作影片</h3>
+        <p style="color: #475569; font-size: 1.02rem; line-height: 1.6; max-width: 500px; margin: 0 auto;">
+            請點擊左側「<b>實驗影片上傳</b>」區域中的「<b>Upload</b>」按鈕，選取 iPad 拍攝的「向上拋豆袋」慢動作影片 (.MOV / .MP4) 以開始分析。
         </p>
     </div>
     """, unsafe_allow_html=True)
-    
-    main_upload = st.file_uploader("直接在此上傳影片 (.MOV / .MP4)", type=["mov", "mp4"], key="main_fallback_uploader")
-    if main_upload is not None:
-        uploaded_file = main_upload
-    else:
-        st.stop()
+    st.stop()
 
 file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
 video_bytes = uploaded_file.getvalue()
