@@ -1,10 +1,10 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 支援 iPad 原生 .mov / .mp4 格式解碼
-- 智能記憶體管理，徹底根除 OOM 伺服器崩潰
-- 遵循 Streamlit 規範，在 slider 呼叫前合法更新步進
-- 紅條軌道垂直加粗至 8px，向上提昇並與播放按鈕精確垂直居中對齊
-- 1:1 佈局、精準垂直居中、真實逐幀數據分析
+- 專為 iPad / iPadOS 17+ 觸控最佳化
+- 解決 iPad 收起側邊欄後無法重新展開的問題（浮動專用展開按鈕）
+- 徹底防止頂部按鈕文字截斷（響應式字體與自動換行支援）
+- 100% 像素級還原純白雙垂直長方形暫停圖示（根除 iPad = Emoji 錯誤）
+- 播放按鈕與紅色進度條增加安全邊距，徹底杜絕貼合問題
 """
 
 import os
@@ -45,17 +45,17 @@ html, body, [class*="css"] {
 }
 
 h1 {
-    font-size: 2.1rem !important;
+    font-size: 2.0rem !important;
     font-weight: 800 !important;
     margin-bottom: 0.2rem !important;
 }
 .sub-caption {
-    font-size: 1.15rem !important;
+    font-size: 1.10rem !important;
     color: #94a3b8 !important;
     margin-bottom: 0.8rem !important;
 }
 
-/* 隱藏頂部彩虹裝飾條與選單 */
+/* 隱藏頂部彩虹裝飾條與多餘部署按鈕 */
 [data-testid="stDecoration"] {
     display: none !important;
     visibility: hidden !important;
@@ -79,15 +79,98 @@ footer {
     visibility: hidden !important;
 }
 
-/* 頂部 5 個微調按鈕標準樣式 */
-div[data-testid="stButton"] button {
-    min-height: 44px !important;
-    font-size: 1.08rem !important;
-    font-weight: 700 !important;
+/* ---------------- 側邊欄展開按鈕 (iPad 友善專屬修復) ---------------- */
+/* 當點擊 << 收起側邊欄後，左上角常駐醒目的高對比度浮動按鈕，隨時可一鍵重新展開 */
+div[data-testid="collapsedControl"],
+div[data-testid="stSidebarCollapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    z-index: 9999999 !important;
+    background-color: #0f172a !important;
+    border: 2px solid #38bdf8 !important;
     border-radius: 10px !important;
+    padding: 6px 12px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    cursor: pointer !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
-/* 專屬：淺褐色圓形播放/暫停按鈕 */
+div[data-testid="collapsedControl"]:hover,
+div[data-testid="stSidebarCollapsedControl"]:hover {
+    background-color: #1e293b !important;
+    border-color: #7dd3fc !important;
+    transform: scale(1.04) !important;
+}
+
+div[data-testid="collapsedControl"] svg,
+div[data-testid="stSidebarCollapsedControl"] svg {
+    fill: #38bdf8 !important;
+    stroke: #38bdf8 !important;
+    color: #38bdf8 !important;
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* 展開按鈕附帶清晰繁體文字標籤 */
+div[data-testid="collapsedControl"]::after,
+div[data-testid="stSidebarCollapsedControl"]::after {
+    content: " 📁 上傳影片" !important;
+    color: #38bdf8 !important;
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    margin-left: 6px !important;
+    white-space: nowrap !important;
+}
+
+/* 側邊欄內的收起按鈕樣式 */
+section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {
+    background: #1e293b !important;
+    border: 1.5px solid #475569 !important;
+    border-radius: 8px !important;
+    color: #ffffff !important;
+}
+
+/* ---------------- 頂部 5 個微調按鈕 (防止文字變 ... 省略號) ---------------- */
+div[data-testid="stButton"] button {
+    min-height: 42px !important;
+    height: auto !important;
+    padding: 5px 3px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1.25 !important;
+}
+
+div[data-testid="stButton"] button p {
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    white-space: normal !important; /* 允許自動換行，徹底消除 ... */
+    word-break: break-word !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* iPad / 平板螢幕尺寸微調 */
+@media screen and (max-width: 1024px) {
+    div[data-testid="stButton"] button {
+        min-height: 40px !important;
+        padding: 4px 2px !important;
+    }
+    div[data-testid="stButton"] button p {
+        font-size: 0.82rem !important;
+        letter-spacing: -0.3px !important;
+    }
+}
+
+/* ---------------- 播放 / 暫停按鈕 (1:1 像素級還原截圖樣式) ---------------- */
 button[data-testid="baseButton-primary"],
 .st-key-btn_play_circle button,
 .st-key-btn_stop_circle button,
@@ -96,7 +179,7 @@ button[kind="primary"] {
     background-color: #b8824f !important;
     color: #ffffff !important;
     border: 2.5px solid #fde68a !important;
-    border-radius: 50% !important;
+    border-radius: 14px !important; /* 還原截圖中的微圓角方形 (Squircle) */
     width: 48px !important;
     height: 48px !important;
     min-height: 48px !important;
@@ -111,55 +194,71 @@ button[kind="primary"] {
     box-shadow: 0 0 16px rgba(212, 154, 91, 0.75), 0 4px 10px rgba(0, 0, 0, 0.5) !important;
     cursor: pointer !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    flex-shrink: 0 !important;
 }
 
 button[data-testid="baseButton-primary"]:hover,
 .st-key-btn_play_circle button:hover,
 .st-key-btn_stop_circle button:hover,
 button[kind="primary"]:hover {
-    transform: scale(1.10) !important;
+    transform: scale(1.08) !important;
     background: linear-gradient(135deg, #e4aa6b 0%, #9e5f22 100%) !important;
-    background-color: #c48b54 !important;
     border-color: #ffffff !important;
     box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-button[data-testid="baseButton-primary"] p,
-.st-key-btn_play_circle button p,
-.st-key-btn_stop_circle button p,
-button[kind="primary"] p {
+/* 播放箭頭樣式 */
+.st-key-btn_play_circle button p {
     color: #ffffff !important;
     font-size: 1.35rem !important;
     font-weight: 800 !important;
     line-height: 1 !important;
     margin: 0 !important;
     padding: 0 !important;
+    padding-left: 3px !important; /* 光學中心微調 */
 }
 
-/* 播放時間軸進度文字 */
+/* 暫停圖示：徹底屏蔽 iPad 原生 = Emoji，純 CSS 繪製兩條純白垂直長條 (100% 還原 MacBook 截圖) */
+.st-key-btn_stop_circle button p {
+    display: none !important;
+    visibility: hidden !important;
+}
+.st-key-btn_stop_circle button::after {
+    content: "" !important;
+    display: block !important;
+    width: 14px !important;
+    height: 18px !important;
+    border-left: 5px solid #ffffff !important;
+    border-right: 5px solid #ffffff !important;
+    box-sizing: border-box !important;
+}
+
+/* ---------------- 播放時間軸與滑桿 ---------------- */
 .play-progress-label {
-    font-size: 1.15rem;
+    font-size: 1.10rem;
     font-weight: 700;
     color: #f8fafc;
     margin-top: 8px;
     margin-bottom: 2px;
 }
 
-/* 播放控制列整行垂直完美居中 */
+/* 控制列垂直居中 */
 div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) {
     align-items: center !important;
 }
 
-/* 紅色滑桿向上提昇並精確垂直居中 */
+/* 紅色滑桿向上微調並垂直居中，強制與左側按鈕保持安全距離（徹底解決貼黏問題） */
 div[data-testid="stSlider"] {
     padding-top: 0px !important;
     margin-top: -6px !important;
+    margin-left: 20px !important; /* 關鍵：強制在左側隔離出 20px 空隙 */
+    padding-left: 2px !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
 }
 
-/* 垂直加粗紅條厚度至 8px，並設圓角 */
+/* 加粗紅條軌道厚度至 8px，並設圓角 */
 div[data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
     height: 8px !important;
     border-radius: 4px !important;
@@ -169,14 +268,14 @@ div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
     border-radius: 4px !important;
 }
 
-/* 拖曳圓點增大至 20px，發光手感提升 */
+/* 拖曳圓點增大至 20px */
 div[data-testid="stSlider"] [role="slider"] {
     width: 20px !important;
     height: 20px !important;
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
-/* 側邊數據看板：1:1 佈局 */
+/* ---------------- 側邊數據看板 ---------------- */
 .side-card-compact {
     background-color: #0f172a;
     border-radius: 12px;
@@ -198,7 +297,6 @@ div[data-testid="stSlider"] [role="slider"] {
     overflow: hidden;
 }
 
-/* 水平左右佈局 */
 .side-row-layout {
     display: flex;
     align-items: center;
@@ -393,10 +491,10 @@ if st.session_state.is_playing:
         st.session_state.is_playing = False
 
 
-# ---------------- 5 個微調按鈕 ----------------
-b1, b2, b3, b4, b5 = st.columns(5)
+# ---------------- 5 個微調按鈕 (合理分配寬度比例，保證完全不截斷) ----------------
+b1, b2, b3, b4, b5 = st.columns([1.15, 0.85, 1.45, 0.85, 1.15])
 with b1:
-    st.button("⏮ 剛拋出點", on_click=jump_to_frame, args=(start_f,), use_container_width=True)
+    st.button("⏮ 剛拋出", on_click=jump_to_frame, args=(start_f,), use_container_width=True)
 with b2:
     st.button("◀ 較前", on_click=step_frame, args=(-1,), use_container_width=True)
 with b3:
@@ -416,7 +514,8 @@ render_html(
     f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>'
 )
 
-col_play, col_slider = st.columns([1, 16], gap="small")
+# 調整欄位比例至 [1.1, 15]，配合 CSS margin-left 徹底隔開
+col_play, col_slider = st.columns([1.1, 15], gap="small")
 with col_play:
     if st.session_state.is_playing:
         st.button("⏸", on_click=stop_playback, key="btn_stop_circle", type="primary")
