@@ -1,8 +1,8 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
 - 專為學校 iPad 課堂環境設計
+- 極簡化未上傳時的提示文字，直觀清爽
 - 影片分析完成後預設從第 0 幀（起點）開始顯示
-- 首頁指引區採用實線告示欄設計，徹底告別虛線拖放框外觀
 - 永久鎖定左側單一上傳欄，無重複介面
 - 暫停按鈕 100% 絕對幾何居中
 - 播放進度高對比度深色字體，適配 iPad 純白主題
@@ -48,12 +48,12 @@ html, body, [class*="css"] {
 h1 {
     font-size: 2.0rem !important;
     font-weight: 800 !important;
-    color: #0f172a !important; /* 深黑藍色標題 */
+    color: #0f172a !important;
     margin-bottom: 0.2rem !important;
 }
 .sub-caption {
     font-size: 1.10rem !important;
-    color: #475569 !important; /* 高對比深灰色次標題 */
+    color: #475569 !important;
     margin-bottom: 0.8rem !important;
 }
 
@@ -377,28 +377,18 @@ uploaded_file = st.sidebar.file_uploader(
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
-# ---------------- 未上傳時的主頁面 (實線現代資訊告示卡片，絕無虛線拖放感) ----------------
+# ---------------- 未上傳時的主頁面 (極簡乾淨單行指引) ----------------
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id", "video_frame"]:
         if k in st.session_state:
             del st.session_state[k]
 
     st.markdown("""
-    <div style="background-color: #ffffff; border: 1.5px solid #e2e8f0; border-left: 6px solid #0284c7; border-radius: 14px; padding: 26px 22px; margin: 20px 0; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05); display: flex; align-items: flex-start; gap: 18px;">
-        <div style="background-color: #e0f2fe; color: #0284c7; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; flex-shrink: 0;">
-            👈
-        </div>
-        <div style="flex: 1;">
-            <h3 style="color: #0f172a; margin: 0 0 6px 0; font-size: 1.25rem; font-weight: 700;">
-                系統就緒：請於左側欄上傳實驗慢動作影片
-            </h3>
-            <p style="color: #475569; font-size: 0.98rem; line-height: 1.6; margin: 0 0 10px 0;">
-                請點擊左側「<b>📁 實驗影片上傳</b>」面板中的 <b>Upload</b> 按鈕，選取 iPad 拍攝的「向上拋豆袋」慢動作影片（支援 .MOV 與 .MP4 格式）。
-            </p>
-            <div style="display: inline-block; background-color: #f1f5f9; color: #475569; font-size: 0.88rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                💡 支援 120 FPS / 240 FPS 慢動作攝影，AI 將全自動逐幀追蹤紅色彩袋並計算能量轉換
-            </div>
-        </div>
+    <div style="background-color: #ffffff; border: 1.5px solid #cbd5e1; border-left: 5px solid #0284c7; border-radius: 10px; padding: 14px 18px; margin: 18px 0; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);">
+        <span style="font-size: 1.4rem; line-height: 1;">👈</span>
+        <span style="color: #0f172a; font-size: 1.05rem; font-weight: 700;">
+            請於左側欄上傳實驗慢動作影片 (.MOV / .MP4)
+        </span>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
