@@ -1,11 +1,8 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 專為學校 iPad 課堂環境設計
-- 極簡化未上傳時的提示文字，直觀清爽
-- 影片分析完成後預設從第 0 幀（起點）開始顯示
-- 永久鎖定左側單一上傳欄，無重複介面
-- 暫停按鈕 100% 絕對幾何居中
-- 播放進度高對比度深色字體，適配 iPad 純白主題
+- 全平台自適應：完美相容【純白淺色主題】與【黑底深色主題】，字體永不隱形
+- 播放控制按鈕架構級重構：單一 key 節點，徹底根除電腦版雙按鈕堆疊問題
+- 暫停圖示絕對居中、影片預設第 0 幀、左側欄永久展開
 """
 
 import os
@@ -37,24 +34,12 @@ def render_html(html_str: str):
     st.markdown("\n".join(clean_lines), unsafe_allow_html=True)
 
 
-# ---------------- 全局 CSS 樣式 ----------------
+# ---------------- 全局 CSS 樣式 (深色 / 淺色自適應) ----------------
 render_html("""
 <style>
 /* 全局基底字體 */
 html, body, [class*="css"] {
     font-size: 1.05rem !important;
-}
-
-h1 {
-    font-size: 2.0rem !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-    margin-bottom: 0.2rem !important;
-}
-.sub-caption {
-    font-size: 1.10rem !important;
-    color: #475569 !important;
-    margin-bottom: 0.8rem !important;
 }
 
 /* 隱藏頂部彩虹裝飾條與多餘部署按鈕 */
@@ -81,7 +66,76 @@ footer {
     visibility: hidden !important;
 }
 
-/* ---------------- 側邊欄防鎖死：永久固定展開 ---------------- */
+/* ---------------- 主題自適應字體顏色 (黑底白字，白底黑字) ---------------- */
+h1 {
+    font-size: 2.0rem !important;
+    font-weight: 800 !important;
+    color: var(--text-color, #0f172a) !important;
+    margin-bottom: 0.2rem !important;
+}
+.sub-caption {
+    font-size: 1.10rem !important;
+    color: var(--secondary-text-color, #64748b) !important;
+    margin-bottom: 0.8rem !important;
+}
+
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+    color: var(--text-color, #0f172a) !important;
+}
+
+/* 播放進度文字 */
+.play-progress-label {
+    font-size: 1.12rem !important;
+    font-weight: 700 !important;
+    color: var(--text-color, #0f172a) !important;
+    margin-top: 10px !important;
+    margin-bottom: 4px !important;
+}
+.play-progress-label b {
+    color: #ef4444 !important; /* 紅色高亮，無論黑底白底都極為清晰 */
+    font-size: 1.25rem !important;
+}
+.play-progress-hint {
+    color: var(--secondary-text-color, #64748b) !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+}
+
+/* 首頁極簡提示卡片自適應 */
+.custom-guide-card {
+    background-color: var(--secondary-background-color, #ffffff) !important;
+    border: 1.5px solid rgba(148, 163, 184, 0.3) !important;
+    border-left: 5px solid #0284c7 !important;
+    border-radius: 10px !important;
+    padding: 14px 18px !important;
+    margin: 18px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+.custom-guide-text {
+    color: var(--text-color, #0f172a) !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+}
+
+/* 針對系統偏好深色模式 (MacBook / Dark iPad) 的進一步增強保障 */
+@media (prefers-color-scheme: dark) {
+    h1, section[data-testid="stSidebar"] h1, .play-progress-label, .custom-guide-text {
+        color: #f8fafc !important;
+    }
+    .sub-caption, .play-progress-hint {
+        color: #cbd5e1 !important;
+    }
+    .custom-guide-card {
+        background-color: #1e293b !important;
+        border-color: #334155 !important;
+    }
+}
+
+/* ---------------- 側邊欄永久固定展開 ---------------- */
 [data-testid="stSidebarCollapseButton"],
 button[data-testid="stSidebarCollapseButton"],
 div[data-testid="stSidebarHeader"] button,
@@ -144,11 +198,17 @@ div[data-testid="stButton"] button p {
     }
 }
 
-/* ---------------- 播放 / 暫停按鈕 (精確絕對居中) ---------------- */
-button[data-testid="baseButton-primary"],
-.st-key-btn_play_circle button,
-.st-key-btn_stop_circle button,
-button[kind="primary"] {
+/* ---------------- 播放 / 暫停按鈕容器 (鎖定單一按鈕，防雙重堆疊) ---------------- */
+div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) > div:first-child {
+    max-height: 48px !important;
+    height: 48px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important; /* 物理隔絕任何堆疊元素 */
+}
+
+.st-key-btn_play_toggle button {
     position: relative !important;
     background: linear-gradient(135deg, #d49a5b 0%, #8c531b 100%) !important;
     background-color: #b8824f !important;
@@ -173,17 +233,14 @@ button[kind="primary"] {
     box-sizing: border-box !important;
 }
 
-button[data-testid="baseButton-primary"]:hover,
-.st-key-btn_play_circle button:hover,
-.st-key-btn_stop_circle button:hover,
-button[kind="primary"]:hover {
+.st-key-btn_play_toggle button:hover {
     transform: scale(1.08) !important;
     background: linear-gradient(135deg, #e4aa6b 0%, #9e5f22 100%) !important;
     border-color: #ffffff !important;
     box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-.st-key-btn_play_circle button p {
+.st-key-btn_play_toggle button p {
     color: #ffffff !important;
     font-size: 1.30rem !important;
     font-weight: 800 !important;
@@ -196,47 +253,7 @@ button[kind="primary"]:hover {
     text-indent: 2px !important;
 }
 
-.st-key-btn_stop_circle button * {
-    display: none !important;
-    visibility: hidden !important;
-    width: 0 !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-.st-key-btn_stop_circle button::after {
-    content: "" !important;
-    position: absolute !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    width: 14px !important;
-    height: 18px !important;
-    border-left: 5px solid #ffffff !important;
-    border-right: 5px solid #ffffff !important;
-    box-sizing: border-box !important;
-    pointer-events: none !important;
-}
-
-/* ---------------- 播放時間軸進度文字 ---------------- */
-.play-progress-label {
-    font-size: 1.12rem !important;
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    margin-top: 10px !important;
-    margin-bottom: 4px !important;
-}
-.play-progress-label b {
-    color: #dc2626 !important;
-    font-size: 1.25rem !important;
-}
-.play-progress-hint {
-    color: #475569 !important;
-    font-size: 0.95rem !important;
-    font-weight: 500 !important;
-}
-
+/* ---------------- 紅色滑桿 ---------------- */
 div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) {
     align-items: center !important;
 }
@@ -377,16 +394,16 @@ uploaded_file = st.sidebar.file_uploader(
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
-# ---------------- 未上傳時的主頁面 (極簡乾淨單行指引) ----------------
+# ---------------- 未上傳時的主頁面 (極簡乾淨單行指引，自適應主題) ----------------
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id", "video_frame"]:
         if k in st.session_state:
             del st.session_state[k]
 
     st.markdown("""
-    <div style="background-color: #ffffff; border: 1.5px solid #cbd5e1; border-left: 5px solid #0284c7; border-radius: 10px; padding: 14px 18px; margin: 18px 0; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);">
+    <div class="custom-guide-card">
         <span style="font-size: 1.4rem; line-height: 1;">👈</span>
-        <span style="color: #0f172a; font-size: 1.05rem; font-weight: 700;">
+        <span class="custom-guide-text">
             請於左側欄上傳實驗慢動作影片 (.MOV / .MP4)
         </span>
     </div>
@@ -438,7 +455,7 @@ if "cached_file_id" not in st.session_state or st.session_state.cached_file_id !
         st.session_state.cached_smoothed_y = smoothed_y
         st.session_state.cached_physics_data = physics_data
         st.session_state.cached_file_id = file_id
-        # 新上傳影片一律從第 0 幀開始（如同未拖動滑桿）
+        # 新上傳影片固定由第 0 幀開始
         st.session_state.video_frame = 0
         st.session_state.is_playing = False
 
@@ -509,7 +526,7 @@ with b5:
 progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames - 1))
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
-# 深黑底色 + 紅色當前影格高亮
+# 自適應黑底白字或白底黑字，紅色當前幀高亮
 render_html(
     f'<div class="play-progress-label">🎥 播放進度：第 <b>{st.session_state.video_frame}</b> / {total_frames - 1} 幀 ({int(progress_ratio * 100)}%) '
     f'<span class="play-progress-hint">（可直接拖動滑桿跳轉影格）</span></div>'
@@ -517,10 +534,32 @@ render_html(
 
 col_play, col_slider = st.columns([1.1, 15], gap="small")
 with col_play:
+    # 當處於播放狀態時，動態注入暫停圖示絕對居中樣式
     if st.session_state.is_playing:
-        st.button("⏸", on_click=stop_playback, key="btn_stop_circle", type="primary")
+        render_html("""
+        <style>
+        .st-key-btn_play_toggle button * {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        .st-key-btn_play_toggle button::after {
+            content: "" !important;
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 14px !important;
+            height: 18px !important;
+            border-left: 5px solid #ffffff !important;
+            border-right: 5px solid #ffffff !important;
+            box-sizing: border-box !important;
+            pointer-events: none !important;
+        }
+        </style>
+        """)
+        st.button("⏸", on_click=stop_playback, key="btn_play_toggle", type="primary")
     else:
-        st.button("▶", on_click=start_playback, key="btn_play_circle", type="primary")
+        st.button("▶", on_click=start_playback, key="btn_play_toggle", type="primary")
 
 with col_slider:
     selected_f = st.slider(
