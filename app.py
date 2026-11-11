@@ -1,10 +1,11 @@
 """
 app.py: 中一科學「實驗 5.2：研究向上拋豆袋的勢能與動能」
-- 專為 iPad / iPadOS 17+ 觸控最佳化
-- 解決 iPad 收起側邊欄後無法重新展開的問題（浮動專用展開按鈕）
-- 徹底防止頂部按鈕文字截斷（響應式字體與自動換行支援）
-- 100% 像素級還原純白雙垂直長方形暫停圖示（根除 iPad = Emoji 錯誤）
-- 播放按鈕與紅色進度條增加安全邊距，徹底杜絕貼合問題
+- 專為學校 iPad 課堂環境設計
+- 徹底鎖定左側上傳欄常駐展開，消除誤按 << 導致鎖死的現象
+- 主畫面提供雙重上傳保障，永不卡死
+- 播放進度文字改為高對比度深色，徹底適配老款 iPad 白色主題
+- 像素級還原 MacBook 截圖金色暫停按鈕
+- 保證按鈕文字不截斷、紅條滑桿安全間距
 """
 
 import os
@@ -47,11 +48,12 @@ html, body, [class*="css"] {
 h1 {
     font-size: 2.0rem !important;
     font-weight: 800 !important;
+    color: #0f172a !important; /* 深黑藍色標題，白底黑字清晰 */
     margin-bottom: 0.2rem !important;
 }
 .sub-caption {
     font-size: 1.10rem !important;
-    color: #94a3b8 !important;
+    color: #475569 !important; /* 高對比深灰色次標題 */
     margin-bottom: 0.8rem !important;
 }
 
@@ -79,63 +81,38 @@ footer {
     visibility: hidden !important;
 }
 
-/* ---------------- 側邊欄展開按鈕 (iPad 友善專屬修復) ---------------- */
-/* 當點擊 << 收起側邊欄後，左上角常駐醒目的高對比度浮動按鈕，隨時可一鍵重新展開 */
-div[data-testid="collapsedControl"],
-div[data-testid="stSidebarCollapsedControl"] {
-    display: flex !important;
+/* ---------------- 側邊欄防鎖死終極方案 ---------------- */
+/* 1. 徹底隱藏 << 收起按鈕，防止學生在 iPad 上誤按 */
+[data-testid="stSidebarCollapseButton"],
+button[data-testid="stSidebarCollapseButton"],
+div[data-testid="stSidebarHeader"] button,
+header [data-testid="stSidebarCollapsedControl"],
+div[data-testid="collapsedControl"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 2. 強制側邊欄常駐展開，即便 iPad 快存了折疊狀態也直接覆蓋展開 */
+section[data-testid="stSidebar"] {
+    display: block !important;
     visibility: visible !important;
-    opacity: 1 !important;
-    position: fixed !important;
-    top: 10px !important;
-    left: 10px !important;
-    z-index: 9999999 !important;
-    background-color: #0f172a !important;
-    border: 2px solid #38bdf8 !important;
-    border-radius: 10px !important;
-    padding: 6px 12px !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
-    cursor: pointer !important;
-    align-items: center !important;
-    justify-content: center !important;
+    transform: none !important;
+    margin-left: 0 !important;
+    min-width: 310px !important;
+    max-width: 360px !important;
+    width: 320px !important;
+    position: relative !important;
+    z-index: 100 !important;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08) !important;
 }
 
-div[data-testid="collapsedControl"]:hover,
-div[data-testid="stSidebarCollapsedControl"]:hover {
-    background-color: #1e293b !important;
-    border-color: #7dd3fc !important;
-    transform: scale(1.04) !important;
+section[data-testid="stSidebar"] > div:first-child {
+    transform: none !important;
+    margin-left: 0 !important;
+    width: 100% !important;
 }
 
-div[data-testid="collapsedControl"] svg,
-div[data-testid="stSidebarCollapsedControl"] svg {
-    fill: #38bdf8 !important;
-    stroke: #38bdf8 !important;
-    color: #38bdf8 !important;
-    width: 20px !important;
-    height: 20px !important;
-}
-
-/* 展開按鈕附帶清晰繁體文字標籤 */
-div[data-testid="collapsedControl"]::after,
-div[data-testid="stSidebarCollapsedControl"]::after {
-    content: " 📁 上傳影片" !important;
-    color: #38bdf8 !important;
-    font-size: 0.92rem !important;
-    font-weight: 700 !important;
-    margin-left: 6px !important;
-    white-space: nowrap !important;
-}
-
-/* 側邊欄內的收起按鈕樣式 */
-section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {
-    background: #1e293b !important;
-    border: 1.5px solid #475569 !important;
-    border-radius: 8px !important;
-    color: #ffffff !important;
-}
-
-/* ---------------- 頂部 5 個微調按鈕 (防止文字變 ... 省略號) ---------------- */
+/* ---------------- 頂部 5 個微調按鈕 (防止文字截斷) ---------------- */
 div[data-testid="stButton"] button {
     min-height: 42px !important;
     height: auto !important;
@@ -152,13 +129,12 @@ div[data-testid="stButton"] button p {
     font-weight: 700 !important;
     line-height: 1.2 !important;
     text-align: center !important;
-    white-space: normal !important; /* 允許自動換行，徹底消除 ... */
+    white-space: normal !important; /* 允許折行，徹底防止被截斷為 ... */
     word-break: break-word !important;
     margin: 0 !important;
     padding: 0 !important;
 }
 
-/* iPad / 平板螢幕尺寸微調 */
 @media screen and (max-width: 1024px) {
     div[data-testid="stButton"] button {
         min-height: 40px !important;
@@ -170,7 +146,7 @@ div[data-testid="stButton"] button p {
     }
 }
 
-/* ---------------- 播放 / 暫停按鈕 (1:1 像素級還原截圖樣式) ---------------- */
+/* ---------------- 播放 / 暫停按鈕 (100% 像素級還原截圖) ---------------- */
 button[data-testid="baseButton-primary"],
 .st-key-btn_play_circle button,
 .st-key-btn_stop_circle button,
@@ -179,7 +155,7 @@ button[kind="primary"] {
     background-color: #b8824f !important;
     color: #ffffff !important;
     border: 2.5px solid #fde68a !important;
-    border-radius: 14px !important; /* 還原截圖中的微圓角方形 (Squircle) */
+    border-radius: 14px !important; /* 截圖中的微圓角方形 (Squircle) */
     width: 48px !important;
     height: 48px !important;
     min-height: 48px !important;
@@ -207,7 +183,6 @@ button[kind="primary"]:hover {
     box-shadow: 0 0 22px rgba(228, 170, 107, 0.95), 0 6px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* 播放箭頭樣式 */
 .st-key-btn_play_circle button p {
     color: #ffffff !important;
     font-size: 1.35rem !important;
@@ -215,10 +190,10 @@ button[kind="primary"]:hover {
     line-height: 1 !important;
     margin: 0 !important;
     padding: 0 !important;
-    padding-left: 3px !important; /* 光學中心微調 */
+    padding-left: 3px !important;
 }
 
-/* 暫停圖示：徹底屏蔽 iPad 原生 = Emoji，純 CSS 繪製兩條純白垂直長條 (100% 還原 MacBook 截圖) */
+/* 暫停按鈕：純 CSS 繪製兩條純白垂直長條，根除 iPadOS = Emoji 錯誤 */
 .st-key-btn_stop_circle button p {
     display: none !important;
     visibility: hidden !important;
@@ -233,32 +208,40 @@ button[kind="primary"]:hover {
     box-sizing: border-box !important;
 }
 
-/* ---------------- 播放時間軸與滑桿 ---------------- */
+/* ---------------- 播放時間軸進度文字 (高對比黑底紅字，徹底解決老 iPad 發白問題) ---------------- */
 .play-progress-label {
-    font-size: 1.10rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin-top: 8px;
-    margin-bottom: 2px;
+    font-size: 1.12rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important; /* 強制深黑藍色，在 iPad 白色背景下 100% 清楚 */
+    margin-top: 10px !important;
+    margin-bottom: 4px !important;
+}
+.play-progress-label b {
+    color: #dc2626 !important; /* 當前幀數以高亮紅色強調 */
+    font-size: 1.25rem !important;
+}
+.play-progress-hint {
+    color: #475569 !important; /* 深灰色提示字 */
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
 }
 
-/* 控制列垂直居中 */
 div[data-testid="stHorizontalBlock"]:has(div[data-testid="stSlider"]) {
     align-items: center !important;
 }
 
-/* 紅色滑桿向上微調並垂直居中，強制與左側按鈕保持安全距離（徹底解決貼黏問題） */
+/* 紅色滑桿向上微調並與左側按鈕保持 20px 舒適間隔 */
 div[data-testid="stSlider"] {
     padding-top: 0px !important;
     margin-top: -6px !important;
-    margin-left: 20px !important; /* 關鍵：強制在左側隔離出 20px 空隙 */
+    margin-left: 20px !important;
     padding-left: 2px !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
 }
 
-/* 加粗紅條軌道厚度至 8px，並設圓角 */
+/* 紅條軌道加粗至 8px 圓角 */
 div[data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
     height: 8px !important;
     border-radius: 4px !important;
@@ -268,14 +251,14 @@ div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div {
     border-radius: 4px !important;
 }
 
-/* 拖曳圓點增大至 20px */
+/* 滑動圓點 */
 div[data-testid="stSlider"] [role="slider"] {
     width: 20px !important;
     height: 20px !important;
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
 }
 
-/* ---------------- 側邊數據看板 ---------------- */
+/* 側邊數據看板 */
 .side-card-compact {
     background-color: #0f172a;
     border-radius: 12px;
@@ -335,7 +318,6 @@ div[data-testid="stSlider"] [role="slider"] {
     margin-top: 1px;
 }
 
-/* 橫向長條圖 */
 .meter-bar-track {
     width: 100%;
     height: 11px;
@@ -387,12 +369,26 @@ uploaded_file = st.sidebar.file_uploader(
 st.title("實驗 5.2：研究向上拋豆袋的勢能與動能")
 render_html('<div class="sub-caption">中一科學單元五：能量轉換與守恆 | 100% 逐幀真實數據分析</div>')
 
+# ---------------- 未上傳時的主頁面 (雙重防護：主畫面中央也提供上傳框) ----------------
 if uploaded_file is None:
     for k in ["cached_frames", "cached_fps", "cached_trajectory", "cached_smoothed_y", "cached_physics_data", "cached_file_id"]:
         if k in st.session_state:
             del st.session_state[k]
-    st.info("👈 請於左側欄上傳 iPad 拍攝的「向上拋豆袋」慢動作影片以開始分析。")
-    st.stop()
+
+    st.markdown("""
+    <div style="background-color: #f1f5f9; border: 2px dashed #0284c7; border-radius: 14px; padding: 22px; text-align: center; margin: 15px 0;">
+        <h3 style="color: #0369a1; margin-top: 0; font-size: 1.35rem;">📹 請選取實驗慢動作影片開始分析</h3>
+        <p style="color: #334155; font-size: 1.0rem; margin-bottom: 8px;">
+            您可以在左側欄上傳，或者直接在下方按鈕選取 iPad 拍攝的「向上拋豆袋」影片 (.MOV / .MP4)
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    main_upload = st.file_uploader("直接在此上傳影片 (.MOV / .MP4)", type=["mov", "mp4"], key="main_fallback_uploader")
+    if main_upload is not None:
+        uploaded_file = main_upload
+    else:
+        st.stop()
 
 file_id = f"upload_{uploaded_file.name}_{uploaded_file.size}"
 video_bytes = uploaded_file.getvalue()
@@ -482,7 +478,7 @@ def on_slider_change():
     st.session_state.is_playing = False
 
 
-# ---------------- 播放推進步進 (合法位置：必須在 st.slider 呼叫前執行) ----------------
+# ---------------- 播放推進步進 (必須在 st.slider 呼叫前執行) ----------------
 if st.session_state.is_playing:
     if st.session_state.video_frame < total_frames - 1:
         st.session_state.video_frame += 1
@@ -491,7 +487,7 @@ if st.session_state.is_playing:
         st.session_state.is_playing = False
 
 
-# ---------------- 5 個微調按鈕 (合理分配寬度比例，保證完全不截斷) ----------------
+# ---------------- 5 個微調按鈕 ----------------
 b1, b2, b3, b4, b5 = st.columns([1.15, 0.85, 1.45, 0.85, 1.15])
 with b1:
     st.button("⏮ 剛拋出", on_click=jump_to_frame, args=(start_f,), use_container_width=True)
@@ -509,12 +505,12 @@ with b5:
 progress_ratio = float(st.session_state.video_frame) / float(max(1, total_frames - 1))
 progress_ratio = min(1.0, max(0.0, progress_ratio))
 
+# 深黑底色 + 紅色當前影格高亮
 render_html(
     f'<div class="play-progress-label">🎥 播放進度：第 <b>{st.session_state.video_frame}</b> / {total_frames - 1} 幀 ({int(progress_ratio * 100)}%) '
-    f'<span style="color: #94a3b8; font-size: 0.95rem; font-weight: normal;">（可直接拖動滑桿跳轉影格）</span></div>'
+    f'<span class="play-progress-hint">（可直接拖動滑桿跳轉影格）</span></div>'
 )
 
-# 調整欄位比例至 [1.1, 15]，配合 CSS margin-left 徹底隔開
 col_play, col_slider = st.columns([1.1, 15], gap="small")
 with col_play:
     if st.session_state.is_playing:
