@@ -650,7 +650,7 @@ with col_panel:
         <div class="side-item-compact" style="border-left-color: #ef4444;">
             <div class="side-row-layout">
                 <div class="side-text-col">
-                    <div class="side-label">📏 高度 (勢能 Ep)</div>
+                    <div class="side-label">📏 勢能 Ep（高度）</div>
                     <div class="side-val-main" style="color: #ef4444;">{cur_h:.0f}%</div>
                     <div class="side-val-sub">{height_desc}</div>
                 </div>
@@ -669,7 +669,7 @@ with col_panel:
         <div class="side-item-compact" style="border-left-color: #3b82f6;">
             <div class="side-row-layout">
                 <div class="side-text-col">
-                    <div class="side-label">⚡ 速率 (動能 Ek)</div>
+                    <div class="side-label">⚡ 動能 Ek（速率）</div>
                     <div class="side-val-main" style="color: #3b82f6;">{cur_speed:.0f}%</div>
                     <div class="side-val-sub">{speed_desc}</div>
                 </div>
